@@ -1,0 +1,24 @@
+{
+    "schemaVersion": 1,
+    "id": "mp3player",
+    "version": "${version}",
+    "name": "MP3 Player",
+    "description": "MP3 Player for Minecraft. Press Right Shift to open.",
+    "authors": ["MP3Player Dev"],
+    "contact": {},
+    "license": "MIT",
+    "icon": "assets/mp3player/icon.png",
+    "entrypoints": {
+        "client": ["com.mp3player.MP3PlayerClient"],
+        "main": ["com.mp3player.MP3PlayerMod"]
+    },
+    "mixins": [
+        "mp3player.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.16.0",
+        "fabric-api": "*",
+        "minecraft": ">=1.21.1 <=1.21.4",
+        "java": ">=21"
+    }
+}

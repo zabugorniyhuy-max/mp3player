@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "com.mp3player.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "JukeboxManagerMixin"
+  ],
+  "client": [
+    "PlayerEntityRendererMixin",
+    "JukeboxManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
