@@ -43,6 +43,8 @@
  */
 package com.mp3player;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.mp3player.client.KeyInputHandler;
 import com.mp3player.client.ModSounds;
 import com.mp3player.client.audio.AudioConverter;
@@ -76,36 +78,33 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.JukeboxBlockEntity;
-import net.minecraft.block.jukebox.JukeboxSong;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.item.ItemDisplayContext;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.item.ItemConvertible;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.state.property.Properties;
-import net.minecraft.state.property.Property;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RotationAxis;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.JukeboxSong;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,7 +146,7 @@ implements ClientModInitializer {
             if (wav == null || !wav.exists()) continue;
             return wav;
         }
-        File convertedFolder = new File(new File(MinecraftClient.getInstance().runDirectory, MODID), "converted");
+        File convertedFolder = new File(new File(Minecraft.getInstance().gameDirectory, MODID), "converted");
         if (convertedFolder.exists()) {
             for (File f : convertedFolder.listFiles()) {
                 String n;
@@ -156,7 +155,7 @@ implements ClientModInitializer {
                 return f;
             }
         }
-        if ((file = new File(MinecraftClient.getInstance().runDirectory, MODID)).exists() && (files = file.listFiles()) != null) {
+        if ((file = new File(Minecraft.getInstance().gameDirectory, MODID)).exists() && (files = file.listFiles()) != null) {
             for (File f : files) {
                 String fName;
                 String n = f.getName();
@@ -177,7 +176,7 @@ implements ClientModInitializer {
     public void onInitializeClient() {
         File instructionFile;
         LOGGER.info("MP3 Player initialized!");
-        File instrFolder = new File(MinecraftClient.getInstance().runDirectory, MODID);
+        File instrFolder = new File(Minecraft.getInstance().gameDirectory, MODID);
         if (!instrFolder.exists()) {
             instrFolder.mkdirs();
         }
@@ -210,7 +209,7 @@ implements ClientModInitializer {
             String trackName = payload.trackName();
             BlockPos pos = payload.pos();
             MusicPlayer local = MusicPlayer.getInstance();
-            if (local.getPlaylist().isEmpty() && !(musicFolder = new File(MinecraftClient.getInstance().runDirectory, MODID)).exists()) {
+            if (local.getPlaylist().isEmpty() && !(musicFolder = new File(Minecraft.getInstance().gameDirectory, MODID)).exists()) {
                 musicFolder.mkdirs();
             }
             if (local.isPlaying()) {
@@ -249,7 +248,7 @@ implements ClientModInitializer {
             if (ModConfig.getInstance().muteGlobal) {
                 return;
             }
-            if (context.client().player != null && context.client().player.getUuid().equals(payload.sender())) {
+            if (context.client().player != null && context.client().player.getUUID().equals(payload.sender())) {
                 return;
             }
             GlobalAudioTracker.getInstance().playGlobal(payload.sender(), payload.trackName(), payload.position(), payload.range(), payload.volume());
@@ -257,11 +256,15 @@ implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(FileTransferStartPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> FileReceiverManager.getInstance().startDownload(payload.fileName(), payload.fileSize(), payload.totalChunks(), payload.sender())));
         ClientPlayNetworking.registerGlobalReceiver(FileTransferChunkPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> FileReceiverManager.getInstance().receiveChunk(payload.fileName(), payload.chunkIndex(), payload.data(), payload.sender())));
         ClientPlayNetworking.registerGlobalReceiver(FileTransferEndPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> FileReceiverManager.getInstance().endDownload(payload.fileName(), payload.sender())));
-        ClientPlayNetworking.registerGlobalReceiver(ShareRequestPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> context.client().setScreen((Screen)new ShareRequestScreen(payload.fileName(), payload.sender(), payload.senderName()))));
+        ClientPlayNetworking.registerGlobalReceiver(ShareRequestPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> {
+            if (context.client() != null && context.client().gui != null) {
+                context.client().gui.setScreen((Screen)new ShareRequestScreen(payload.fileName(), payload.sender(), payload.senderName()));
+            }
+        }));
         ClientPlayNetworking.registerGlobalReceiver(ShareResponsePayload.PACKET_ID, (payload, context) -> context.client().execute(() -> {
             if (payload.accepted()) {
                 File fileToShare = null;
-                File musicFolder = new File(MinecraftClient.getInstance().runDirectory, MODID);
+                File musicFolder = new File(Minecraft.getInstance().gameDirectory, MODID);
                 File f = new File(musicFolder, payload.fileName());
                 if (f.exists()) {
                     fileToShare = f;
@@ -274,18 +277,18 @@ implements ClientModInitializer {
                 if (fileToShare != null) {
                     FileSenderManager.getInstance().startUpload(fileToShare, payload.responder());
                     if (context.client().player != null) {
-                        context.client().player.sendMessage((Text)Text.literal((String)("\u00a7a\u0418\u0433\u0440\u043e\u043a \u043f\u0440\u0438\u043d\u044f\u043b \u0437\u0430\u043f\u0440\u043e\u0441. \u041d\u0430\u0447\u0438\u043d\u0430\u044e \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0443 \u00a7e" + payload.fileName())), false);
+                        context.client().player.sendSystemMessage((Component)Component.literal((String)("\u00a7a\u0418\u0433\u0440\u043e\u043a \u043f\u0440\u0438\u043d\u044f\u043b \u0437\u0430\u043f\u0440\u043e\u0441. \u041d\u0430\u0447\u0438\u043d\u0430\u044e \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0443 \u00a7e" + payload.fileName())));
                     }
                 }
             } else if (context.client().player != null) {
-                context.client().player.sendMessage((Text)Text.literal((String)("\u00a7c\u0418\u0433\u0440\u043e\u043a \u043e\u0442\u043a\u043b\u043e\u043d\u0438\u043b \u0437\u0430\u043f\u0440\u043e\u0441 \u043d\u0430 \u043f\u0435\u0441\u043d\u044e \u00a7e" + payload.fileName())), false);
+                context.client().player.sendSystemMessage((Component)Component.literal((String)("\u00a7c\u0418\u0433\u0440\u043e\u043a \u043e\u0442\u043a\u043b\u043e\u043d\u0438\u043b \u0437\u0430\u043f\u0440\u043e\u0441 \u043d\u0430 \u043f\u0435\u0441\u043d\u044e \u00a7e" + payload.fileName())));
             }
         }));
         ClientPlayNetworking.registerGlobalReceiver(RequestTrackClientPayload.PACKET_ID, (payload, context) -> context.client().execute(() -> {
             File[] files;
             File mainFolder;
             File trackFile = MP3PlayerClient.findWavFile(payload.trackName());
-            if (trackFile == null && (mainFolder = new File(MinecraftClient.getInstance().runDirectory, MODID)).exists() && (files = mainFolder.listFiles()) != null) {
+            if (trackFile == null && (mainFolder = new File(Minecraft.getInstance().gameDirectory, MODID)).exists() && (files = mainFolder.listFiles()) != null) {
                 for (File f : files) {
                     String n;
                     int d;
@@ -334,29 +337,28 @@ implements ClientModInitializer {
         GsmtcHudOverlay.register();
         ModSounds.register();
         KeyInputHandler.register();
-        ScreenEvents.AFTER_INIT.register((MinecraftClient mc, Screen scr, int sw, int sh) -> {
-            ScreenMouseEvents.allowMouseClick(scr).register((Screen s, net.minecraft.client.gui.Click click) -> {
-                return click.button() != 0 || mc.world == null || !GsmtcHudOverlay.handleClick(click.x(), click.y());
+        ScreenEvents.AFTER_INIT.register((Minecraft mc, Screen scr, int sw, int sh) -> {
+            ScreenMouseEvents.allowMouseClick(scr).register((Screen s, net.minecraft.client.input.MouseButtonEvent click) -> {
+                return click.button() != 0 || mc.level == null || !GsmtcHudOverlay.handleClick(click.x(), click.y());
             });
         });
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+        LevelRenderEvents.END_MAIN.register((LevelRenderContext context) -> {
             BlockPos pos;
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.world == null || client.player == null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client.level == null || client.player == null) {
                 return;
             }
-            Camera camera = client.gameRenderer != null ? client.gameRenderer.getCamera() : null;
+            Camera camera = client.gameRenderer != null ? client.gameRenderer.mainCamera() : null;
             if (camera == null) {
                 return;
             }
-            Vec3d camPos = camera.getCameraPos();
+            Vec3 camPos = camera.position();
             if (camPos == null) {
                 return;
             }
-            MatrixStack matrices = context.matrices();
-            VertexConsumerProvider vertexConsumers = context.consumers();
-            net.minecraft.client.render.command.OrderedRenderCommandQueue commandQueue = context.commandQueue();
-            if (matrices == null || vertexConsumers == null) {
+            PoseStack matrices = context.poseStack();
+            net.minecraft.client.renderer.SubmitNodeCollector commandQueue = context.submitNodeCollector();
+            if (matrices == null || commandQueue == null) {
                 return;
             }
             HashSet<BlockPos> rendered = new HashSet<BlockPos>();
@@ -377,7 +379,7 @@ implements ClientModInitializer {
                     durSec = player.getDurationMs() / 1000L;
                     isPaused = player.isPaused();
                 }
-                MP3PlayerClient.drawJukeboxHologramUnified(client, activeHologram.title, activeHologram.artist, activeHologram.discStack, curSec, durSec, isPaused, dx, dy, dz, matrices, vertexConsumers, commandQueue, camera);
+                MP3PlayerClient.drawJukeboxHologramUnified(client, activeHologram.title, activeHologram.artist, activeHologram.discStack, curSec, durSec, isPaused, dx, dy, dz, matrices, commandQueue, camera);
             }
             for (Map.Entry entry : activeJukeboxes.entrySet()) {
                 double dz;
@@ -399,23 +401,23 @@ implements ClientModInitializer {
                     title = rawName.replace(".wav", "").replace(".mp3", "").trim();
                 }
                 ItemStack discStack = null;
-                BlockEntity be = client.world.getBlockEntity(pos);
+                BlockEntity be = client.level.getBlockEntity(pos);
                 if (be instanceof JukeboxBlockEntity) {
                     JukeboxBlockEntity jbe = (JukeboxBlockEntity)be;
-                    discStack = jbe.getStack();
+                    discStack = jbe.getTheItem();
                 }
                 long curSec = player.getCurrentPositionMs() / 1000L;
                 long durSec = player.getDurationMs() / 1000L;
-                MP3PlayerClient.drawJukeboxHologramUnified(client, title, artist, discStack, curSec, durSec, player.isPaused(), dx, dy, dz, matrices, vertexConsumers, commandQueue, camera);
+                MP3PlayerClient.drawJukeboxHologramUnified(client, title, artist, discStack, curSec, durSec, player.isPaused(), dx, dy, dz, matrices, commandQueue, camera);
             }
             int chunkX = (int)camPos.x >> 4;
             int n = (int)camPos.z >> 4;
             for (int cx = chunkX - 1; cx <= chunkX + 1; ++cx) {
                 for (int cz = n - 1; cz <= n + 1; ++cz) {
-                    WorldChunk chunk;
-                    if (!client.world.isChunkLoaded(cx, cz) || (chunk = client.world.getChunk(cx, cz)) == null) continue;
+                    LevelChunk chunk;
+                    if (!client.level.hasChunk(cx, cz) || (chunk = client.level.getChunk(cx, cz)) == null) continue;
                     for (BlockEntity be : chunk.getBlockEntities().values()) {
-                        NbtComponent customData;
+                        CustomData customData;
                         String[] p;
                         double dz;
                         double dy;
@@ -423,19 +425,19 @@ implements ClientModInitializer {
                         double distSq;
                         JukeboxBlockEntity jukebox;
                         BlockPos pos2;
-                        if (!(be instanceof JukeboxBlockEntity) || rendered.contains(pos2 = (jukebox = (JukeboxBlockEntity)be).getPos()) || (distSq = (dx = (double)pos2.getX() + 0.5 - camPos.x) * dx + (dy = (double)pos2.getY() + 1.25 - camPos.y) * dy + (dz = (double)pos2.getZ() + 0.5 - camPos.z) * dz) > 1296.0) continue;
-                        ItemStack stack = jukebox.getStack();
-                        boolean hasRecordBlock = client.world.getBlockState(pos2).contains(Properties.HAS_RECORD) && client.world.getBlockState(pos2).get(Properties.HAS_RECORD);
+                        if (!(be instanceof JukeboxBlockEntity) || rendered.contains(pos2 = (jukebox = (JukeboxBlockEntity)be).getBlockPos()) || (distSq = (dx = (double)pos2.getX() + 0.5 - camPos.x) * dx + (dy = (double)pos2.getY() + 1.25 - camPos.y) * dy + (dz = (double)pos2.getZ() + 0.5 - camPos.z) * dz) > 1296.0) continue;
+                        ItemStack stack = jukebox.getTheItem();
+                        boolean hasRecordBlock = client.level.getBlockState(pos2).hasProperty(BlockStateProperties.HAS_RECORD) && client.level.getBlockState(pos2).getValue(BlockStateProperties.HAS_RECORD);
                         if (!hasRecordBlock && (stack == null || stack.isEmpty())) continue;
                         boolean isPlaying = false;
                         long curSec = 0L;
                         long durSec = 0L;
-                        String title = stack != null && !stack.isEmpty() ? stack.getName().getString() : "\u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0430";
+                        String title = stack != null && !stack.isEmpty() ? stack.getHoverName().getString() : "\u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0430";
                         String artist = "Minecraft";
-                        if (jukebox.getManager() != null) {
-                            isPlaying = jukebox.getManager().isPlaying();
-                            curSec = jukebox.getManager().getTicksSinceSongStarted() / 20L;
-                            JukeboxSong song = jukebox.getManager().getSong();
+                        if (jukebox.getSongPlayer() != null) {
+                            isPlaying = jukebox.getSongPlayer().isPlaying();
+                            curSec = jukebox.getSongPlayer().getTicksSinceSongStarted() / 20L;
+                            JukeboxSong song = jukebox.getSongPlayer().getSong();
                             if (song != null) {
                                 durSec = (long)song.lengthInSeconds();
                                 String desc = song.description().getString();
@@ -448,8 +450,8 @@ implements ClientModInitializer {
                                 }
                             }
                         }
-                        if (stack != null && !stack.isEmpty() && (customData = (NbtComponent)stack.getOrDefault(DataComponentTypes.CUSTOM_DATA, (Object)NbtComponent.DEFAULT)).copyNbt().contains("CustomMp3")) {
-                            String customTrack = customData.copyNbt().getString("CustomMp3").orElse("");
+                        if (stack != null && !stack.isEmpty() && (customData = (CustomData)stack.getOrDefault(DataComponents.CUSTOM_DATA, (Object)CustomData.EMPTY)).copyTag().contains("CustomMp3")) {
+                            String customTrack = customData.copyTag().getString("CustomMp3").orElse("");
                             if (customTrack.contains(" - ")) {
                                 p = customTrack.split(" - ", 2);
                                 artist = p[0].trim();
@@ -461,18 +463,18 @@ implements ClientModInitializer {
                         }
                         if (!isPlaying && !hasRecordBlock) continue;
                         rendered.add(pos2);
-                        MP3PlayerClient.drawJukeboxHologramUnified(client, title, artist, stack, curSec, durSec, false, dx, dy, dz, matrices, vertexConsumers, commandQueue, camera);
+                        MP3PlayerClient.drawJukeboxHologramUnified(client, title, artist, stack, curSec, durSec, false, dx, dy, dz, matrices, commandQueue, camera);
                     }
                 }
             }
 
-            float tickProgress = client.getRenderTickCounter().getTickProgress(false);
-            for (net.minecraft.client.network.AbstractClientPlayerEntity player : client.world.getPlayers()) {
+            float tickProgress = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+            for (net.minecraft.client.player.AbstractClientPlayer player : client.level.players()) {
                 String pTrack = null;
                 long pCurSec = 0L;
                 long pDurSec = 0L;
 
-                if (player.getUuid().equals(client.player.getUuid())) {
+                if (player.getUUID().equals(client.player.getUUID())) {
                     MusicPlayer localP = MusicPlayer.getInstance();
                     if (ModConfig.getInstance().speakerMode) {
                         if (localP.isPlaying()) {
@@ -489,7 +491,7 @@ implements ClientModInitializer {
                         }
                     }
                 } else {
-                    GlobalAudioTracker.GlobalPlayer gp = GlobalAudioTracker.getInstance().getActivePlayers().get(player.getUuid());
+                    GlobalAudioTracker.GlobalPlayer gp = GlobalAudioTracker.getInstance().getActivePlayers().get(player.getUUID());
                     if (gp != null && gp.isPlaying()) {
                         pTrack = gp.getTrackName();
                         pCurSec = gp.getCurrentPositionMs() / 1000L;
@@ -498,22 +500,22 @@ implements ClientModInitializer {
                 }
 
                 if (pTrack != null && !pTrack.isEmpty()) {
-                    Vec3d pPos = player.getLerpedPos(tickProgress);
+                    Vec3 pPos = player.getPosition(tickProgress);
                     double px = pPos.x - camPos.x;
-                    double py = pPos.y - camPos.y + player.getHeight() + 0.6;
+                    double py = pPos.y - camPos.y + player.getBbHeight() + 0.6;
                     double pz = pPos.z - camPos.z;
 
-                    matrices.push();
+                    matrices.pushPose();
                     matrices.translate(px, py, pz);
-                    matrices.multiply(camera.getRotation());
-                    drawPlayerHologram(pTrack, pCurSec, pDurSec, matrices, vertexConsumers, 0xF000F0);
-                    matrices.pop();
+                    matrices.rotate(camera.rotation());
+                    drawPlayerHologram(pTrack, pCurSec, pDurSec, matrices, commandQueue, 0xF000F0);
+                    matrices.popPose();
                 }
             }
         });
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (!world.isClient() || hand != Hand.MAIN_HAND) {
-                return ActionResult.PASS;
+            if (!world.isClientSide() || hand != InteractionHand.MAIN_HAND) {
+                return InteractionResult.PASS;
             }
             BlockPos pos = hitResult.getBlockPos();
             ActiveHologram holo = activeHolograms.get(pos);
@@ -524,37 +526,40 @@ implements ClientModInitializer {
                     holo.paused = jPlayer.isPaused();
                 }
                 String msg = jPlayer.isPaused() ? "\u00a76\u23f8 \u041f\u0430\u0443\u0437\u0430 \u043f\u0440\u043e\u0438\u0433\u0440\u044b\u0432\u0430\u0442\u0435\u043b\u044f: \u00a7f" : "\u00a7a\u25b6 \u0412\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u0435: \u00a7f";
-                player.sendMessage((Text)Text.literal((String)(msg + jPlayer.getTrackName())), true);
-                return ActionResult.SUCCESS;
+                player.sendOverlayMessage((Component)Component.literal((String)(msg + jPlayer.getTrackName())));
+                return InteractionResult.SUCCESS;
             }
             if (holo != null) {
                 holo.paused = !holo.paused;
                 String msg = holo.paused ? "\u00a76\u23f8 \u041f\u0430\u0443\u0437\u0430 \u043f\u0440\u043e\u0438\u0433\u0440\u044b\u0432\u0430\u0442\u0435\u043b\u044f: \u00a7f" : "\u00a7a\u25b6 \u0412\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u0435: \u00a7f";
-                player.sendMessage((Text)Text.literal((String)(msg + holo.title)), true);
-                return ActionResult.SUCCESS;
+                player.sendOverlayMessage((Component)Component.literal((String)(msg + holo.title)));
+                return InteractionResult.SUCCESS;
             }
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         });
     }
 
-    public static void drawJukeboxHologramUnified(MinecraftClient client, String title, String artist, ItemStack discStack, long curSec, long durSec, boolean isPaused, double dx, double dy, double dz, MatrixStack matrices, VertexConsumerProvider vertexConsumers, net.minecraft.client.render.command.OrderedRenderCommandQueue commandQueue, Camera camera) {
+    public static void drawJukeboxHologramUnified(Minecraft client, String title, String artist, ItemStack discStack, long curSec, long durSec, boolean isPaused, double dx, double dy, double dz, PoseStack matrices, net.minecraft.client.renderer.SubmitNodeCollector commandQueue, Camera camera) {
         int i;
-        TextRenderer tr = client.textRenderer;
-        ItemStack renderStack = discStack != null && !discStack.isEmpty() ? discStack : new ItemStack((ItemConvertible)Items.MUSIC_DISC_CAT);
-        matrices.push();
+        Font tr = client.font;
+        ItemStack renderStack = discStack != null && !discStack.isEmpty() ? discStack : new ItemStack((net.minecraft.world.level.ItemLike)Items.MUSIC_DISC_CAT);
+        matrices.pushPose();
         matrices.translate(dx, dy + 0.18, dz);
         float spin = (float)(System.currentTimeMillis() % 3500L) / 3500.0f * 360.0f;
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(spin));
+        matrices.rotateDegrees(Axis.YP, spin);
         matrices.scale(0.42f, 0.42f, 0.42f);
-        if (commandQueue != null && client.getItemModelManager() != null) {
-            net.minecraft.client.render.item.ItemRenderState itemState = new net.minecraft.client.render.item.ItemRenderState();
-            client.getItemModelManager().clearAndUpdate(itemState, renderStack, ItemDisplayContext.FIXED, (World)client.world, null, 0);
-            itemState.render(matrices, commandQueue, 0xF000F0, OverlayTexture.DEFAULT_UV, 0);
+        if (commandQueue != null && client.getItemModelResolver() != null) {
+            net.minecraft.client.renderer.item.ItemStackRenderState itemState = new net.minecraft.client.renderer.item.ItemStackRenderState();
+            client.getItemModelResolver().updateForTopItem(itemState, renderStack, ItemDisplayContext.FIXED, (Level)client.level, null, 0);
+            itemState.submit(matrices, commandQueue, 0xF000F0, OverlayTexture.NO_OVERLAY, 0);
         }
-        matrices.pop();
+        matrices.popPose();
         String statusIcon = isPaused ? "\u00a76\u23f8" : "\u00a7a\u25b6";
         String line1 = statusIcon + " \u00a7e\u00a7l" + title;
-        String line2 = "\u00a77\u0410\u0432\u0442\u043e\u0440: \u00a7f" + (artist.isEmpty() ? "\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d" : artist);
+        String line2 = "\u00a77\u0410\u0432\u0442\u043e\u0440: \u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043d";
+        if (!artist.isEmpty()) {
+            line2 = "\u00a77\u0410\u0432\u0442\u043e\u0440: \u00a7f" + artist;
+        }
         float frac = durSec > 0L ? Math.max(0.0f, Math.min(1.0f, (float)curSec / (float)durSec)) : 0.0f;
         int totalBars = 12;
         int filled = (int)(frac * (float)totalBars);
@@ -568,39 +573,37 @@ implements ClientModInitializer {
         }
         String line3 = String.format("\u00a7f%d:%02d \u00a78[%s\u00a78] \u00a77%d:%02d", curSec / 60L, curSec % 60L, bar.toString(), durSec / 60L, durSec % 60L);
         String line4 = isPaused ? "\u00a7e[\u041f\u041a\u041c: \u0412\u043e\u0437\u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c]" : "\u00a7b[\u041f\u041a\u041c: \u041f\u0430\u0443\u0437\u0430]";
-        matrices.push();
+        matrices.pushPose();
         matrices.translate(dx, dy + 0.4, dz);
-        matrices.multiply(camera.getRotation());
+        matrices.rotate(camera.rotation());
         matrices.scale(-0.022f, -0.022f, 0.022f);
-        Matrix4f posMat = matrices.peek().getPositionMatrix();
         int bgColor = 0x66000000;
-        float x1 = (float)(-tr.getWidth(line1)) / 2.0f;
-        tr.draw(line1, x1, -22.0f, -1, false, posMat, vertexConsumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, 0xF000F0);
-        float x2 = (float)(-tr.getWidth(line2)) / 2.0f;
-        tr.draw(line2, x2, -11.0f, -1, false, posMat, vertexConsumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, 0xF000F0);
-        float x3 = (float)(-tr.getWidth(line3)) / 2.0f;
-        tr.draw(line3, x3, 0.0f, -1, false, posMat, vertexConsumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, 0xF000F0);
-        float x4 = (float)(-tr.getWidth(line4)) / 2.0f;
-        tr.draw(line4, x4, 11.0f, -1, false, posMat, vertexConsumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, 0xF000F0);
-        matrices.pop();
+        float x1 = (float)(-tr.width(line1)) / 2.0f;
+        commandQueue.submitText(matrices, x1, -22.0f, Component.literal(line1).getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, -1, bgColor, 0xF000F0, 0);
+        float x2 = (float)(-tr.width(line2)) / 2.0f;
+        commandQueue.submitText(matrices, x2, -11.0f, Component.literal(line2).getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, -1, bgColor, 0xF000F0, 0);
+        float x3 = (float)(-tr.width(line3)) / 2.0f;
+        commandQueue.submitText(matrices, x3, 0.0f, Component.literal(line3).getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, -1, bgColor, 0xF000F0, 0);
+        float x4 = (float)(-tr.width(line4)) / 2.0f;
+        commandQueue.submitText(matrices, x4, 11.0f, Component.literal(line4).getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, -1, bgColor, 0xF000F0, 0);
+        matrices.popPose();
     }
 
-    public static void drawPlayerHologram(String trackName, long currentSec, long durationSec, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light) {
-        if (trackName == null || trackName.isEmpty()) {
+    public static void drawPlayerHologram(String trackName, long currentSec, long durationSec, PoseStack matrices, net.minecraft.client.renderer.SubmitNodeCollector commandQueue, int light) {
+        if (trackName == null || trackName.isEmpty() || commandQueue == null) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        TextRenderer textRenderer = client.textRenderer;
+        Minecraft client = Minecraft.getInstance();
+        Font textRenderer = client.font;
         String timeStr = durationSec > 0L ? String.format("%d:%02d / %d:%02d", currentSec / 60L, currentSec % 60L, durationSec / 60L, durationSec % 60L) : String.format("%d:%02d", currentSec / 60L, currentSec % 60L);
         String displayText = "\u25b6 " + trackName + " (" + timeStr + ")";
-        float x = -textRenderer.getWidth(displayText) / 2;
-        matrices.push();
+        float x = -textRenderer.width(displayText) / 2.0f;
+        matrices.pushPose();
         matrices.translate(0.0, 0.7, 0.0);
         matrices.scale(-0.025f, -0.025f, 0.025f);
-        Matrix4f positionMatrix = matrices.peek().getPositionMatrix();
-        int bgColor = client.options.getTextBackgroundColor(0.25f);
-        textRenderer.draw(displayText, x, 0.0f, 0xFFCC00, false, positionMatrix, vertexConsumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, light);
-        matrices.pop();
+        int bgColor = client.options.getBackgroundColor(0.25f);
+        commandQueue.submitText(matrices, x, 0.0f, Component.literal(displayText).getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, 0xFFCC00, bgColor, light, 0);
+        matrices.popPose();
     }
 
     public static class ActiveHologram {
@@ -616,7 +619,7 @@ implements ClientModInitializer {
             this.pos = pos;
             this.title = title;
             this.artist = artist;
-            this.discStack = discStack != null && !discStack.isEmpty() ? discStack.copy() : new ItemStack((ItemConvertible)Items.MUSIC_DISC_CAT);
+            this.discStack = discStack != null && !discStack.isEmpty() ? discStack.copy() : new ItemStack((ItemLike)Items.MUSIC_DISC_CAT);
             this.startTimeMs = System.currentTimeMillis();
             this.durationSec = durationSec;
             this.paused = false;

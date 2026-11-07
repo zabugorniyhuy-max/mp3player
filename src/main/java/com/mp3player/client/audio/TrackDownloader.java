@@ -16,10 +16,10 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.CompletableFuture;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class TrackDownloader {
-    private static final File DOWNLOAD_FOLDER = new File(MinecraftClient.getInstance().runDirectory, "mp3player");
+    private static final File DOWNLOAD_FOLDER = new File(Minecraft.getInstance().gameDirectory, "mp3player");
 
     public static CompletableFuture<Boolean> downloadTrack(String urlString, String fileName) {
         return CompletableFuture.supplyAsync(() -> {

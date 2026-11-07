@@ -13,19 +13,19 @@
 package com.mp3player.network;
 
 import java.util.UUID;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Uuids;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record ShareRequestPayload(String fileName, UUID sender, String senderName, UUID target) implements CustomPayload
+public record ShareRequestPayload(String fileName, UUID sender, String senderName, UUID target) implements CustomPacketPayload
 {
-    public static final CustomPayload.Id<ShareRequestPayload> PACKET_ID = new CustomPayload.Id(Identifier.of((String)"mp3player", (String)"share_request"));
-    public static final PacketCodec<RegistryByteBuf, ShareRequestPayload> CODEC = PacketCodec.tuple((PacketCodec)PacketCodecs.STRING, ShareRequestPayload::fileName, (PacketCodec)Uuids.PACKET_CODEC, ShareRequestPayload::sender, (PacketCodec)PacketCodecs.STRING, ShareRequestPayload::senderName, (PacketCodec)Uuids.PACKET_CODEC, ShareRequestPayload::target, ShareRequestPayload::new);
+    public static final CustomPacketPayload.Type<ShareRequestPayload> PACKET_ID = new CustomPacketPayload.Type(Identifier.fromNamespaceAndPath((String)"mp3player", (String)"share_request"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, ShareRequestPayload> CODEC = StreamCodec.composite((StreamCodec)ByteBufCodecs.STRING_UTF8, ShareRequestPayload::fileName, (StreamCodec)UUIDUtil.STREAM_CODEC, ShareRequestPayload::sender, (StreamCodec)ByteBufCodecs.STRING_UTF8, ShareRequestPayload::senderName, (StreamCodec)UUIDUtil.STREAM_CODEC, ShareRequestPayload::target, ShareRequestPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return PACKET_ID;
     }
 }

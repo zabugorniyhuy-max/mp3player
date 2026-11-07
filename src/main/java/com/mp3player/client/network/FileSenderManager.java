@@ -17,8 +17,8 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.UUID;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public class FileSenderManager {
     private static final FileSenderManager INSTANCE = new FileSenderManager();
@@ -35,7 +35,7 @@ public class FileSenderManager {
         if (!file.exists()) {
             return;
         }
-        UUID sender = MinecraftClient.getInstance().player.getUuid();
+        UUID sender = Minecraft.getInstance().player.getUUID();
         this.uploadQueue.add(new UploadTask(file, sender, target));
     }
 
@@ -82,7 +82,7 @@ public class FileSenderManager {
         }
 
         public void start() {
-            ClientPlayNetworking.send((CustomPayload)new FileTransferStartPayload(this.file.getName(), this.fileSize, this.totalChunks, this.sender, this.target));
+            ClientPlayNetworking.send((CustomPacketPayload)new FileTransferStartPayload(this.file.getName(), this.fileSize, this.totalChunks, this.sender, this.target));
             try {
                 this.stream = new FileInputStream(this.file);
             }
@@ -106,7 +106,7 @@ public class FileSenderManager {
                     } else {
                         actualData = buffer;
                     }
-                    ClientPlayNetworking.send((CustomPayload)new FileTransferChunkPayload(this.file.getName(), this.currentChunk, actualData, this.sender, this.target));
+                    ClientPlayNetworking.send((CustomPacketPayload)new FileTransferChunkPayload(this.file.getName(), this.currentChunk, actualData, this.sender, this.target));
                     ++this.currentChunk;
                 }
                 return bytesRead < 16000;
@@ -126,7 +126,7 @@ public class FileSenderManager {
             catch (Exception exception) {
                 // empty catch block
             }
-            ClientPlayNetworking.send((CustomPayload)new FileTransferEndPayload(this.file.getName(), this.sender, this.target));
+            ClientPlayNetworking.send((CustomPacketPayload)new FileTransferEndPayload(this.file.getName(), this.sender, this.target));
         }
     }
 }

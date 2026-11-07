@@ -20,18 +20,18 @@ import com.mp3player.client.config.ModConfig;
 import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.MainScreen;
 import com.mp3player.client.gui.nanovg.NanoVGEngine;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import com.mojang.renderpearl.backend.opengl.GlTexture;
 
 public class GsmtcHudOverlay {
-    private static final Identifier UNIFORM_FONT = Identifier.of((String)"minecraft", (String)"uniform");
+    private static final Identifier UNIFORM_FONT = Identifier.fromNamespaceAndPath((String)"minecraft", (String)"uniform");
     private static int lastPillX = 0;
     private static int lastPillY = 0;
     private static int lastPillW = 0;
@@ -44,12 +44,15 @@ public class GsmtcHudOverlay {
     private static int lastBarW = 0;
 
     public static void register() {
-        HudRenderCallback.EVENT.register(GsmtcHudOverlay::render);
+        HudElementRegistry.addLast(
+            Identifier.fromNamespaceAndPath("mp3player", "hud_overlay"),
+            GsmtcHudOverlay::render
+        );
     }
 
-    private static void render(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || client.player == null || client.options.hudHidden) {
+    private static void render(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || client.player == null || (client.gui.hud != null && client.gui.hud.isHidden())) {
             lastPillW = 0;
             lastPillH = 0;
             lastBtnRadius = 0;
@@ -57,9 +60,9 @@ public class GsmtcHudOverlay {
         }
         GsmtcManager manager = GsmtcManager.getInstance();
         MusicPlayer local = MusicPlayer.getInstance();
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
-        if (screenW <= 0 || screenH <= 0 || client.getWindow().getFramebufferWidth() <= 0 || client.getWindow().getFramebufferHeight() <= 0) {
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
+        if (screenW <= 0 || screenH <= 0 || client.getWindow().getWidth() <= 0 || client.getWindow().getHeight() <= 0) {
             lastPillW = 0;
             lastPillH = 0;
             lastBtnRadius = 0;
@@ -70,10 +73,10 @@ public class GsmtcHudOverlay {
         }
         double mouseX = -1.0;
         double mouseY = -1.0;
-        if (client.currentScreen != null) {
-            double scale = client.getWindow().getScaleFactor();
-            mouseX = client.mouse.getX() / scale;
-            mouseY = client.mouse.getY() / scale;
+        if (client.gui.screen() != null) {
+            double scale = client.getWindow().getGuiScale();
+            mouseX = client.mouseHandler.xpos() / scale;
+            mouseY = client.mouseHandler.ypos() / scale;
         }
         boolean isGsmtcPlaying = manager.isAvailable() && manager.hasTrack() && manager.isPlaying();
         boolean isLocalPlaying = local.isPlaying();
@@ -87,8 +90,8 @@ public class GsmtcHudOverlay {
         boolean hasGsmtc = isGsmtcPlaying || manager.isAvailable() && manager.hasTrack() && !isLocalPlaying;
         NanoVGEngine nvg = NanoVGEngine.getInstance();
         if (nvg.isAvailable()) {
-            ctx.drawDeferredElements();
-            float scale = (float)client.getWindow().getScaleFactor();
+            ctx.extractDeferredElements(screenW, screenH, tickCounter != null ? tickCounter.getGameTimeDeltaPartialTick(true) : 0.0f);
+            float scale = (float)client.getWindow().getGuiScale();
             nvg.beginFrame(screenW, screenH, scale);
             GsmtcHudOverlay.renderActiveCapsuleNanoVG(nvg, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
             nvg.endFrame();
@@ -99,9 +102,9 @@ public class GsmtcHudOverlay {
 
     private static int getGsmtcCoverGlId() {
         try {
-            AbstractTexture tex = MinecraftClient.getInstance().getTextureManager().getTexture(GsmtcManager.COVER_TEXTURE_ID);
-            if (tex != null && tex.getGlTexture() instanceof net.minecraft.client.texture.GlTexture glTex) {
-                return glTex.getGlId();
+            AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(GsmtcManager.COVER_TEXTURE_ID);
+            if (tex != null && tex.getTexture() instanceof GlTexture glTex) {
+                return glTex.glId();
             }
         }
         catch (Throwable throwable) {
@@ -112,9 +115,9 @@ public class GsmtcHudOverlay {
 
     private static int getLocalCoverGlId() {
         try {
-            AbstractTexture tex = MinecraftClient.getInstance().getTextureManager().getTexture(AlbumArtExtractor.LOCAL_COVER_TEXTURE_ID);
-            if (tex != null && tex.getGlTexture() instanceof net.minecraft.client.texture.GlTexture glTex) {
-                return glTex.getGlId();
+            AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(AlbumArtExtractor.LOCAL_COVER_TEXTURE_ID);
+            if (tex != null && tex.getTexture() instanceof GlTexture glTex) {
+                return glTex.glId();
             }
         }
         catch (Throwable throwable) {
@@ -247,11 +250,11 @@ public class GsmtcHudOverlay {
         return String.format("%d:%02d", m, s);
     }
 
-    public static void renderActiveCapsule(DrawContext ctx, GsmtcManager manager, MusicPlayer local, boolean hasGsmtc, int screenW, int screenH, double mouseX, double mouseY) {
+    public static void renderActiveCapsule(GuiGraphicsExtractor ctx, GsmtcManager manager, MusicPlayer local, boolean hasGsmtc, int screenW, int screenH, double mouseX, double mouseY) {
         boolean hoverBtn;
         int btnColor;
         boolean hasCover;
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int pillW = 205;
         int pillH = 24;
         int x = (screenW - pillW) / 2;
@@ -272,11 +275,11 @@ public class GsmtcHudOverlay {
         int artY = y + 4;
         boolean bl = hasCover = hasGsmtc && manager.hasCover();
         if (hasCover) {
-            ctx.drawTexturedQuad(GsmtcManager.COVER_TEXTURE_ID, artX, artY, artSize, artSize, 0.0f, 1.0f, 0.0f, 1.0f);
+            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, artX, artY, artSize, artSize, 0.0f, 1.0f, 0.0f, 1.0f);
             GsmtcHudOverlay.drawCircleOutline(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, 0x44FFFFFF);
         } else {
             GsmtcHudOverlay.drawCircle(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, -14934748);
-            ctx.drawCenteredTextWithShadow(client.textRenderer, Text.literal("♪"), artX + artSize / 2, artY + 4, -13312);
+            ctx.centeredText(client.font, Component.literal("♪"), artX + artSize / 2, artY + 4, -13312);
             GsmtcHudOverlay.drawCircleOutline(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, 0x33FFFFFF);
         }
         String title = hasGsmtc ? manager.getTitle() : local.getCurrentTrackName();
@@ -292,18 +295,18 @@ public class GsmtcHudOverlay {
         lastBtnRadius = btnRadius;
         int barsX = btnX - 26;
         int timeX = barsX - 4;
-        int timeW = client.textRenderer.getWidth(timeStr);
+        int timeW = client.font.width(timeStr);
         String fullInfo = artist.isEmpty() ? title : title + " \u00b7 " + artist;
         int maxTextW = timeX - timeW - (artX + artSize + 10);
-        Object displayInfo = client.textRenderer.trimToWidth(fullInfo, Math.max(30, maxTextW));
+        Object displayInfo = client.font.plainSubstrByWidth(fullInfo, Math.max(30, maxTextW));
         if (fullInfo.length() > ((String)displayInfo).length()) {
-            displayInfo = client.textRenderer.trimToWidth(fullInfo, Math.max(20, maxTextW - 6)) + "..";
+            displayInfo = client.font.plainSubstrByWidth(fullInfo, Math.max(20, maxTextW - 6)) + "..";
         }
         int textX = artX + artSize + 5;
         int textY = y + 5;
-        Text renderedText = Text.literal((String)displayInfo);
-        ctx.drawText(client.textRenderer, (Text)renderedText, textX, textY, -1, true);
-        ctx.drawText(client.textRenderer, Text.literal(timeStr), timeX - timeW, textY, -3354404, true);
+        Component renderedText = Component.literal((String)displayInfo);
+        ctx.text(client.font, renderedText, textX, textY, -1, true);
+        ctx.text(client.font, Component.literal(timeStr), timeX - timeW, textY, -3354404, true);
         if (isPlaying) {
             long now = System.currentTimeMillis();
             for (int i = 0; i < 3; ++i) {
@@ -348,8 +351,8 @@ public class GsmtcHudOverlay {
         }
     }
 
-    private static void renderStandbyCapsule(DrawContext ctx, int screenW, int screenH, double mouseX, double mouseY) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private static void renderStandbyCapsule(GuiGraphicsExtractor ctx, int screenW, int screenH, double mouseX, double mouseY) {
+        Minecraft client = Minecraft.getInstance();
         int pillW = 145;
         int pillH = 22;
         int x = (screenW - pillW) / 2;
@@ -365,11 +368,11 @@ public class GsmtcHudOverlay {
         int artX = x + 4;
         int artY = y + 4;
         GsmtcHudOverlay.drawCircle(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, -14802904);
-        ctx.drawCenteredTextWithShadow(client.textRenderer, Text.literal("♪"), artX + artSize / 2, artY + 3, -13312);
+        ctx.centeredText(client.font, Component.literal("♪"), artX + artSize / 2, artY + 3, -13312);
         int textX = artX + artSize + 5;
         int textY = y + 6;
-        Text text = Text.literal("MP3 Player · [P]");
-        ctx.drawText(client.textRenderer, text, textX, textY, -3355444, true);
+        Component text = Component.literal("MP3 Player · [P]");
+        ctx.text(client.font, text, textX, textY, -3355444, true);
         int btnRadius = 6;
         int btnX = x + pillW - 12;
         int btnY = y + pillH / 2;
@@ -383,8 +386,8 @@ public class GsmtcHudOverlay {
 
     public static boolean handleClick(double mouseX, double mouseY) {
         boolean hasLocal;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || client.player == null || client.options.hudHidden) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || client.player == null || (client.gui.hud != null && client.gui.hud.isHidden())) {
             return false;
         }
         if (lastPillW <= 0 || lastPillH <= 0) {
@@ -421,8 +424,8 @@ public class GsmtcHudOverlay {
             return true;
         }
         if (GsmtcHudOverlay.isInside(mouseX, mouseY, lastPillX, lastPillY, lastPillW, lastPillH)) {
-            if (!(client.currentScreen instanceof MainScreen)) {
-                client.setScreen((Screen)new MainScreen());
+            if (!(client.gui.screen() instanceof MainScreen)) {
+                client.gui.setScreen((Screen)new MainScreen());
             }
             return true;
         }
@@ -437,14 +440,14 @@ public class GsmtcHudOverlay {
         return GsmtcHudOverlay.isInside(mouseX, mouseY, lastPillX, lastPillY, lastPillW, lastPillH);
     }
 
-    private static void drawSmoothPill(DrawContext ctx, int x, int y, int w, int h, int color) {
+    private static void drawSmoothPill(GuiGraphicsExtractor ctx, int x, int y, int w, int h, int color) {
         int r = h / 2;
         ctx.fill(x + r, y, x + w - r, y + h, color);
         GsmtcHudOverlay.drawCircle(ctx, x + r, y + r, r, color);
         GsmtcHudOverlay.drawCircle(ctx, x + w - r, y + r, r, color);
     }
 
-    private static void drawSmoothPillBorder(DrawContext ctx, int x, int y, int w, int h, int color) {
+    private static void drawSmoothPillBorder(GuiGraphicsExtractor ctx, int x, int y, int w, int h, int color) {
         int r = h / 2;
         ctx.fill(x + r, y, x + w - r, y + 1, color);
         ctx.fill(x + r, y + h - 1, x + w - r, y + h, color);
@@ -452,14 +455,14 @@ public class GsmtcHudOverlay {
         GsmtcHudOverlay.drawCircleOutline(ctx, x + w - r, y + r, r, color);
     }
 
-    private static void drawCircle(DrawContext ctx, int cx, int cy, int r, int color) {
+    private static void drawCircle(GuiGraphicsExtractor ctx, int cx, int cy, int r, int color) {
         for (int dy = -r; dy <= r; ++dy) {
             int dx = (int)Math.sqrt(r * r - dy * dy);
             ctx.fill(cx - dx, cy + dy, cx + dx, cy + dy + 1, color);
         }
     }
 
-    private static void drawCircleOutline(DrawContext ctx, int cx, int cy, int r, int color) {
+    private static void drawCircleOutline(GuiGraphicsExtractor ctx, int cx, int cy, int r, int color) {
         for (int dy = -r; dy <= r; ++dy) {
             int dx = (int)Math.sqrt(r * r - dy * dy);
             ctx.fill(cx - dx, cy + dy, cx - dx + 1, cy + dy + 1, color);
@@ -467,7 +470,7 @@ public class GsmtcHudOverlay {
         }
     }
 
-    private static void drawMiniPlayTriangle(DrawContext ctx, int cx, int cy) {
+    private static void drawMiniPlayTriangle(GuiGraphicsExtractor ctx, int cx, int cy) {
         for (int i = 0; i <= 4; ++i) {
             ctx.fill(cx + i, cy - (4 - i), cx + i + 1, cy + (4 - i) + 1, -1);
         }

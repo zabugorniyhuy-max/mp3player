@@ -11,19 +11,19 @@
  */
 package com.mp3player.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record GlobalPlayPayload(String trackName, long position, int range, float volume) implements CustomPayload
+public record GlobalPlayPayload(String trackName, long position, int range, float volume) implements CustomPacketPayload
 {
-    public static final Identifier ID = Identifier.of((String)"mp3player", (String)"global_play_c2s");
-    public static final CustomPayload.Id<GlobalPlayPayload> PACKET_ID = new CustomPayload.Id(ID);
-    public static final PacketCodec<RegistryByteBuf, GlobalPlayPayload> CODEC = PacketCodec.tuple((PacketCodec)PacketCodecs.STRING, GlobalPlayPayload::trackName, (PacketCodec)PacketCodecs.VAR_LONG, GlobalPlayPayload::position, (PacketCodec)PacketCodecs.INTEGER, GlobalPlayPayload::range, (PacketCodec)PacketCodecs.FLOAT, GlobalPlayPayload::volume, GlobalPlayPayload::new);
+    public static final Identifier ID = Identifier.fromNamespaceAndPath((String)"mp3player", (String)"global_play_c2s");
+    public static final CustomPacketPayload.Type<GlobalPlayPayload> PACKET_ID = new CustomPacketPayload.Type(ID);
+    public static final StreamCodec<RegistryFriendlyByteBuf, GlobalPlayPayload> CODEC = StreamCodec.composite((StreamCodec)ByteBufCodecs.STRING_UTF8, GlobalPlayPayload::trackName, (StreamCodec)ByteBufCodecs.VAR_LONG, GlobalPlayPayload::position, (StreamCodec)ByteBufCodecs.INT, GlobalPlayPayload::range, (StreamCodec)ByteBufCodecs.FLOAT, GlobalPlayPayload::volume, GlobalPlayPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return PACKET_ID;
     }
 }

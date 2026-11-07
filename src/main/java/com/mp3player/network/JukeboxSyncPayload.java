@@ -13,21 +13,21 @@
  */
 package com.mp3player.network;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 
-public record JukeboxSyncPayload(BlockPos pos, String title, String artist, ItemStack discStack, int durationSec, boolean isPlaying) implements CustomPayload
+public record JukeboxSyncPayload(BlockPos pos, String title, String artist, ItemStack discStack, int durationSec, boolean isPlaying) implements CustomPacketPayload
 {
-    public static final Identifier ID_VALUE = Identifier.of((String)"mp3player", (String)"jukebox_sync");
-    public static final CustomPayload.Id<JukeboxSyncPayload> ID = new CustomPayload.Id(ID_VALUE);
-    public static final PacketCodec<RegistryByteBuf, JukeboxSyncPayload> CODEC = PacketCodec.tuple((PacketCodec)BlockPos.PACKET_CODEC, JukeboxSyncPayload::pos, (PacketCodec)PacketCodecs.STRING, JukeboxSyncPayload::title, (PacketCodec)PacketCodecs.STRING, JukeboxSyncPayload::artist, (PacketCodec)ItemStack.OPTIONAL_PACKET_CODEC, JukeboxSyncPayload::discStack, (PacketCodec)PacketCodecs.INTEGER, JukeboxSyncPayload::durationSec, (PacketCodec)PacketCodecs.BOOLEAN, JukeboxSyncPayload::isPlaying, JukeboxSyncPayload::new);
+    public static final Identifier ID_VALUE = Identifier.fromNamespaceAndPath((String)"mp3player", (String)"jukebox_sync");
+    public static final CustomPacketPayload.Type<JukeboxSyncPayload> ID = new CustomPacketPayload.Type(ID_VALUE);
+    public static final StreamCodec<RegistryFriendlyByteBuf, JukeboxSyncPayload> CODEC = StreamCodec.composite((StreamCodec)BlockPos.STREAM_CODEC, JukeboxSyncPayload::pos, (StreamCodec)ByteBufCodecs.STRING_UTF8, JukeboxSyncPayload::title, (StreamCodec)ByteBufCodecs.STRING_UTF8, JukeboxSyncPayload::artist, (StreamCodec)ItemStack.OPTIONAL_STREAM_CODEC, JukeboxSyncPayload::discStack, (StreamCodec)ByteBufCodecs.INT, JukeboxSyncPayload::durationSec, (StreamCodec)ByteBufCodecs.BOOL, JukeboxSyncPayload::isPlaying, JukeboxSyncPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return ID;
     }
 }

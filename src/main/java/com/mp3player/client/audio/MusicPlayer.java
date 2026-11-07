@@ -27,8 +27,8 @@ import javax.sound.sampled.LineEvent;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public class MusicPlayer {
     private static MusicPlayer instance;
@@ -66,7 +66,7 @@ public class MusicPlayer {
         if (!this.isConverting && (mp3Files = this.musicFolder.listFiles((dir, name) -> AudioConverter.isConvertible(new File(dir, name)))) != null && mp3Files.length > 0) {
             this.isConverting = true;
             MP3PlayerClient.LOGGER.info("Found {} audio files, starting conversion...", (Object)mp3Files.length);
-            AudioConverter.convertAllMp3InFolder(this.musicFolder, () -> MinecraftClient.getInstance().execute(() -> {
+            AudioConverter.convertAllMp3InFolder(this.musicFolder, () -> Minecraft.getInstance().execute(() -> {
                 this.isConverting = false;
                 this.loadPlaylistFiles();
             }));
@@ -141,8 +141,8 @@ public class MusicPlayer {
         if (!ModConfig.getInstance().speakerMode) {
             return;
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.getNetworkHandler() == null || mc.player == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() == null || mc.player == null) {
             return;
         }
         String track = "";
@@ -161,7 +161,7 @@ public class MusicPlayer {
             vol = g.getVolume();
         }
         try {
-            ClientPlayNetworking.send((CustomPayload)new GlobalPlayPayload(track, pos, ModConfig.getInstance().speakerRange, vol));
+            ClientPlayNetworking.send((CustomPacketPayload)new GlobalPlayPayload(track, pos, ModConfig.getInstance().speakerRange, vol));
         }
         catch (Exception exception) {
             // empty catch block
@@ -169,12 +169,12 @@ public class MusicPlayer {
     }
 
     public void broadcastStop() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.getNetworkHandler() == null || mc.player == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() == null || mc.player == null) {
             return;
         }
         try {
-            ClientPlayNetworking.send((CustomPayload)new GlobalPlayPayload("", 0L, 0, 0.0f));
+            ClientPlayNetworking.send((CustomPacketPayload)new GlobalPlayPayload("", 0L, 0, 0.0f));
         }
         catch (Exception exception) {
             // empty catch block

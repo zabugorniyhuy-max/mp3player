@@ -4,14 +4,13 @@ import com.mp3player.network.JukeboxSyncPayload;
 import com.mp3player.network.StopCustomDiscPayload;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.JukeboxBlockEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,24 +18,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(JukeboxBlockEntity.class)
 public abstract class JukeboxBlockEntityMixin {
-    @Inject(method = "dropRecord", at = @At("HEAD"))
+    @Inject(method = "popOutTheItem", at = @At("HEAD"))
     private void onDropRecord(CallbackInfo ci) {
         stopDiscPlayback();
     }
 
-    @Inject(method = "onBlockReplaced", at = @At("HEAD"))
+    @Inject(method = "preRemoveSideEffects", at = @At("HEAD"))
     private void onBlockReplaced(BlockPos pos, BlockState oldState, CallbackInfo ci) {
         stopDiscPlayback();
     }
 
     private void stopDiscPlayback() {
         JukeboxBlockEntity self = (JukeboxBlockEntity)(Object)this;
-        World world = self.getWorld();
-        if (world instanceof ServerWorld serverWorld) {
-            BlockPos pos = self.getPos();
+        Level world = self.getLevel();
+        if (world instanceof ServerLevel serverWorld) {
+            BlockPos pos = self.getBlockPos();
             StopCustomDiscPayload stopCustom = new StopCustomDiscPayload(pos);
             JukeboxSyncPayload stopSync = new JukeboxSyncPayload(pos, "", "", ItemStack.EMPTY, 0, false);
-            for (ServerPlayerEntity p : PlayerLookup.tracking(serverWorld, pos)) {
+            for (ServerPlayer p : PlayerLookup.tracking(serverWorld, pos)) {
                 if (ServerPlayNetworking.canSend(p, StopCustomDiscPayload.PACKET_ID)) {
                     ServerPlayNetworking.send(p, stopCustom);
                 }

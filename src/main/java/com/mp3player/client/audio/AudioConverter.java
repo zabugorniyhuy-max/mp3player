@@ -14,7 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.CompletableFuture;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class AudioConverter {
     private static File ffmpegExe = null;
@@ -34,7 +34,7 @@ public class AudioConverter {
      * Enabled aggressive exception aggregation
      */
     private static File extractFFmpeg() {
-        File gameDir = MinecraftClient.getInstance().runDirectory;
+        File gameDir = Minecraft.getInstance().gameDirectory;
         File mp3playerDir = new File(gameDir, "mp3player");
         File ffmpegFile = new File(mp3playerDir, "ffmpeg.exe");
         if (ffmpegFile.exists()) {
@@ -79,7 +79,7 @@ public class AudioConverter {
     }
 
     public static File getConvertedFolder() {
-        File gameDir = MinecraftClient.getInstance().runDirectory;
+        File gameDir = Minecraft.getInstance().gameDirectory;
         File convertedDir = new File(gameDir, "mp3player/converted");
         if (!convertedDir.exists()) {
             convertedDir.mkdirs();

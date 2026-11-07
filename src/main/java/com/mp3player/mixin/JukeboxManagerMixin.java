@@ -5,39 +5,39 @@ import com.mp3player.network.PlayCustomDiscPayload;
 import com.mp3player.network.StopCustomDiscPayload;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.JukeboxBlockEntity;
-import net.minecraft.block.jukebox.JukeboxManager;
-import net.minecraft.block.jukebox.JukeboxSong;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.WorldAccess;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.JukeboxSong;
+import net.minecraft.world.item.JukeboxSongPlayer;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(JukeboxManager.class)
+@Mixin(JukeboxSongPlayer.class)
 public class JukeboxManagerMixin {
     @Shadow
-    private BlockPos pos;
+    private BlockPos blockPos;
 
-    @Inject(method = "startPlaying", at = @At("HEAD"), cancellable = true)
-    private void onStartPlaying(WorldAccess world, RegistryEntry<JukeboxSong> songEntry, CallbackInfo ci) {
-        if (world instanceof ServerWorld serverWorld) {
-            BlockEntity blockEntity = serverWorld.getBlockEntity(this.pos);
+    @Inject(method = "play", at = @At("HEAD"), cancellable = true)
+    private void onStartPlaying(LevelAccessor world, Holder<JukeboxSong> songEntry, CallbackInfo ci) {
+        if (world instanceof ServerLevel serverWorld) {
+            BlockEntity blockEntity = serverWorld.getBlockEntity(this.blockPos);
             if (blockEntity instanceof JukeboxBlockEntity jukebox) {
-                ItemStack stack = jukebox.getStack();
-                NbtComponent customData;
-                if (stack != null && !stack.isEmpty() && (customData = (NbtComponent)stack.getOrDefault(DataComponentTypes.CUSTOM_DATA, NbtComponent.DEFAULT)).copyNbt().contains("CustomMp3")) {
-                    String mp3 = customData.copyNbt().getString("CustomMp3").orElse("");
+                ItemStack stack = jukebox.getTheItem();
+                CustomData customData;
+                if (stack != null && !stack.isEmpty() && (customData = (CustomData)stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY)).copyTag().contains("CustomMp3")) {
+                    String mp3 = customData.copyTag().getString("CustomMp3").orElse("");
                     String title = mp3;
                     String artist = "Неизвестен";
                     if (mp3.contains(" - ")) {
@@ -47,13 +47,13 @@ public class JukeboxManagerMixin {
                     } else {
                         title = mp3.replace(".wav", "").replace(".mp3", "").trim();
                     }
-                    JukeboxSyncPayload sync = new JukeboxSyncPayload(this.pos, title, artist, stack, -1, true);
-                    for (ServerPlayerEntity p : PlayerLookup.tracking(serverWorld, this.pos)) {
+                    JukeboxSyncPayload sync = new JukeboxSyncPayload(this.blockPos, title, artist, stack, -1, true);
+                    for (ServerPlayer p : PlayerLookup.tracking(serverWorld, this.blockPos)) {
                         if (ServerPlayNetworking.canSend(p, JukeboxSyncPayload.ID)) {
                             ServerPlayNetworking.send(p, sync);
                         }
                         if (ServerPlayNetworking.canSend(p, PlayCustomDiscPayload.ID)) {
-                            ServerPlayNetworking.send(p, new PlayCustomDiscPayload(this.pos, mp3));
+                            ServerPlayNetworking.send(p, new PlayCustomDiscPayload(this.blockPos, mp3));
                         }
                     }
                     ci.cancel();
@@ -77,11 +77,11 @@ public class JukeboxManagerMixin {
                         }
                     }
                 } else if (stack != null && !stack.isEmpty()) {
-                    title = stack.getName().getString();
+                    title = stack.getHoverName().getString();
                 }
 
-                JukeboxSyncPayload sync = new JukeboxSyncPayload(this.pos, title, artist, stack != null ? stack : ItemStack.EMPTY, dur, true);
-                for (ServerPlayerEntity p : PlayerLookup.tracking(serverWorld, this.pos)) {
+                JukeboxSyncPayload sync = new JukeboxSyncPayload(this.blockPos, title, artist, stack != null ? stack : ItemStack.EMPTY, dur, true);
+                for (ServerPlayer p : PlayerLookup.tracking(serverWorld, this.blockPos)) {
                     if (ServerPlayNetworking.canSend(p, JukeboxSyncPayload.ID)) {
                         ServerPlayNetworking.send(p, sync);
                     }
@@ -90,16 +90,16 @@ public class JukeboxManagerMixin {
         }
     }
 
-    @Inject(method = "stopPlaying", at = @At("HEAD"))
-    private void onStopPlaying(WorldAccess world, BlockState state, CallbackInfo ci) {
-        if (world instanceof ServerWorld serverWorld) {
-            JukeboxSyncPayload stopSync = new JukeboxSyncPayload(this.pos, "", "", ItemStack.EMPTY, 0, false);
-            for (ServerPlayerEntity p : PlayerLookup.tracking(serverWorld, this.pos)) {
+    @Inject(method = "stop", at = @At("HEAD"))
+    private void onStopPlaying(LevelAccessor world, BlockState state, CallbackInfo ci) {
+        if (world instanceof ServerLevel serverWorld) {
+            JukeboxSyncPayload stopSync = new JukeboxSyncPayload(this.blockPos, "", "", ItemStack.EMPTY, 0, false);
+            for (ServerPlayer p : PlayerLookup.tracking(serverWorld, this.blockPos)) {
                 if (ServerPlayNetworking.canSend(p, JukeboxSyncPayload.ID)) {
                     ServerPlayNetworking.send(p, stopSync);
                 }
                 if (ServerPlayNetworking.canSend(p, StopCustomDiscPayload.PACKET_ID)) {
-                    ServerPlayNetworking.send(p, new StopCustomDiscPayload(this.pos));
+                    ServerPlayNetworking.send(p, new StopCustomDiscPayload(this.blockPos));
                 }
             }
         }

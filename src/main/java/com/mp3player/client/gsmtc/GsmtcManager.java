@@ -11,6 +11,7 @@
  */
 package com.mp3player.client.gsmtc;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mp3player.client.audio.MusicPlayer;
 import com.mp3player.client.gsmtc.GsmtcBridge;
 import com.mp3player.client.gsmtc.GsmtcLoader;
@@ -25,12 +26,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFWNativeWin32;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.Identifier;
 
 public class GsmtcManager {
     private static GsmtcManager instance;
@@ -49,7 +48,7 @@ public class GsmtcManager {
     private volatile double lastReportedNativePos = -1.0;
     private volatile long lastSeekTime = 0L;
     public static final Identifier COVER_TEXTURE_ID;
-    private NativeImageBackedTexture coverTexture = null;
+    private DynamicTexture coverTexture = null;
     private volatile int currentThumbVersion = -1;
     private volatile byte[] currentCoverBytes = null;
     private volatile String lastNotifiedTitle = "";
@@ -99,7 +98,7 @@ public class GsmtcManager {
             if (statusChanged && newStatus == 1) {
                 try {
                     if (MusicPlayer.getInstance().isPlaying()) {
-                        MinecraftClient.getInstance().execute(() -> MusicPlayer.getInstance().pause());
+                        Minecraft.getInstance().execute(() -> MusicPlayer.getInstance().pause());
                     }
                 }
                 catch (Throwable throwable) {
@@ -194,7 +193,7 @@ public class GsmtcManager {
                         imgConn.setConnectTimeout(5000);
                         imgConn.setReadTimeout(5000);
                         if (imgConn.getResponseCode() == 200 && (bytes = imgConn.getInputStream().readAllBytes()).length > 0) {
-                            MinecraftClient.getInstance().execute(() -> this.applyCoverBytes(bytes));
+                            Minecraft.getInstance().execute(() -> this.applyCoverBytes(bytes));
                         }
                     }
                 }
@@ -213,16 +212,16 @@ public class GsmtcManager {
         }
         this.currentCoverBytes = bytes;
         NanoVGEngine.getInstance().updateGsmtcCoverImage(bytes);
-        MinecraftClient.getInstance().execute(() -> {
+        Minecraft.getInstance().execute(() -> {
             try {
                 NativeImage image = NativeImage.read((InputStream)new ByteArrayInputStream(bytes));
                 if (image != null) {
                     if (this.coverTexture != null) {
                         this.coverTexture.close();
                     }
-                    this.coverTexture = new NativeImageBackedTexture(() -> "gsmtc_album_art", image);
+                    this.coverTexture = new DynamicTexture(() -> "gsmtc_album_art", image);
                     this.coverTexture.upload();
-                    MinecraftClient.getInstance().getTextureManager().registerTexture(COVER_TEXTURE_ID, (AbstractTexture)this.coverTexture);
+                    Minecraft.getInstance().getTextureManager().register(COVER_TEXTURE_ID, (AbstractTexture)this.coverTexture);
                 }
             }
             catch (Throwable throwable) {
@@ -254,13 +253,13 @@ public class GsmtcManager {
             }
             return;
         }
-        MinecraftClient.getInstance().execute(() -> this.applyCoverBytes(imgBytes));
+        Minecraft.getInstance().execute(() -> this.applyCoverBytes(imgBytes));
     }
 
     private void clearTexture() {
         this.currentCoverBytes = null;
         NanoVGEngine.getInstance().updateGsmtcCoverImage(null);
-        MinecraftClient.getInstance().execute(() -> {
+        Minecraft.getInstance().execute(() -> {
             if (this.coverTexture != null) {
                 this.coverTexture.close();
                 this.coverTexture = null;
@@ -272,7 +271,7 @@ public class GsmtcManager {
         if (this.bridge != null) {
             try {
                 if (MusicPlayer.getInstance().isPlaying()) {
-                    MinecraftClient.getInstance().execute(() -> MusicPlayer.getInstance().pause());
+                    Minecraft.getInstance().execute(() -> MusicPlayer.getInstance().pause());
                 }
             }
             catch (Throwable throwable) {
@@ -295,7 +294,7 @@ public class GsmtcManager {
         if (this.bridge != null) {
             try {
                 if (!this.isPlaying() && MusicPlayer.getInstance().isPlaying()) {
-                    MinecraftClient.getInstance().execute(() -> MusicPlayer.getInstance().pause());
+                    Minecraft.getInstance().execute(() -> MusicPlayer.getInstance().pause());
                 }
             }
             catch (Throwable throwable) {
@@ -479,16 +478,10 @@ public class GsmtcManager {
             File runDir;
             File cacheDir;
             long hwnd = 0L;
-            try {
-                hwnd = GLFWNativeWin32.glfwGetWin32Window((long)MinecraftClient.getInstance().getWindow().getHandle());
-            }
-            catch (Throwable throwable) {
-                // empty catch block
-            }
             if (hwnd != 0L) {
                 this.bridge.browser_set_parent_hwnd(hwnd);
             }
-            if (!(cacheDir = new File(new File(runDir = MinecraftClient.getInstance().runDirectory, "mp3player"), "browser_cache")).exists()) {
+            if (!(cacheDir = new File(new File(runDir = Minecraft.getInstance().gameDirectory, "mp3player"), "browser_cache")).exists()) {
                 cacheDir.mkdirs();
             }
             this.bridge.browser_init(cacheDir.getAbsolutePath());
@@ -506,16 +499,10 @@ public class GsmtcManager {
             File runDir;
             File cacheDir;
             long hwnd = 0L;
-            try {
-                hwnd = GLFWNativeWin32.glfwGetWin32Window((long)MinecraftClient.getInstance().getWindow().getHandle());
-            }
-            catch (Throwable throwable) {
-                // empty catch block
-            }
             if (hwnd != 0L) {
                 this.bridge.browser_set_parent_hwnd(hwnd);
             }
-            if (!(cacheDir = new File(new File(runDir = MinecraftClient.getInstance().runDirectory, "mp3player"), "browser_cache")).exists()) {
+            if (!(cacheDir = new File(new File(runDir = Minecraft.getInstance().gameDirectory, "mp3player"), "browser_cache")).exists()) {
                 cacheDir.mkdirs();
             }
             this.bridge.browser_init(cacheDir.getAbsolutePath());
@@ -644,7 +631,7 @@ public class GsmtcManager {
     }
 
     static {
-        COVER_TEXTURE_ID = Identifier.of((String)"mp3player", (String)"gsmtc_album_art");
+        COVER_TEXTURE_ID = Identifier.fromNamespaceAndPath((String)"mp3player", (String)"gsmtc_album_art");
     }
 }
 

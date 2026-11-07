@@ -13,19 +13,19 @@
 package com.mp3player.network;
 
 import java.util.UUID;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Uuids;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record FileTransferEndPayload(String fileName, UUID sender, UUID target) implements CustomPayload
+public record FileTransferEndPayload(String fileName, UUID sender, UUID target) implements CustomPacketPayload
 {
-    public static final CustomPayload.Id<FileTransferEndPayload> PACKET_ID = new CustomPayload.Id(Identifier.of((String)"mp3player", (String)"file_transfer_end"));
-    public static final PacketCodec<RegistryByteBuf, FileTransferEndPayload> CODEC = PacketCodec.tuple((PacketCodec)PacketCodecs.STRING, FileTransferEndPayload::fileName, (PacketCodec)Uuids.PACKET_CODEC, FileTransferEndPayload::sender, (PacketCodec)Uuids.PACKET_CODEC, FileTransferEndPayload::target, FileTransferEndPayload::new);
+    public static final CustomPacketPayload.Type<FileTransferEndPayload> PACKET_ID = new CustomPacketPayload.Type(Identifier.fromNamespaceAndPath((String)"mp3player", (String)"file_transfer_end"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, FileTransferEndPayload> CODEC = StreamCodec.composite((StreamCodec)ByteBufCodecs.STRING_UTF8, FileTransferEndPayload::fileName, (StreamCodec)UUIDUtil.STREAM_CODEC, FileTransferEndPayload::sender, (StreamCodec)UUIDUtil.STREAM_CODEC, FileTransferEndPayload::target, FileTransferEndPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return PACKET_ID;
     }
 }

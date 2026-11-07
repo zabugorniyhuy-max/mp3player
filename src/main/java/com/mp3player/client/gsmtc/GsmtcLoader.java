@@ -14,7 +14,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class GsmtcLoader {
     private static GsmtcBridge bridgeInstance = null;
@@ -29,7 +29,7 @@ public class GsmtcLoader {
         }
         try {
             File nativesDir;
-            File runDir = MinecraftClient.getInstance().runDirectory;
+            File runDir = Minecraft.getInstance().gameDirectory;
             if (runDir == null) {
                 runDir = new File(".");
             }

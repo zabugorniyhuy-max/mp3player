@@ -17,9 +17,9 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineEvent;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.sounds.SoundSource;
 
 public class JukeboxAudioPlayer {
     private final BlockPos pos;
@@ -93,13 +93,13 @@ public class JukeboxAudioPlayer {
 
     public void updateVolume() {
         if (this.currentClip != null && (this.isPlaying || this.isPaused)) {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player == null) {
                 this.setVolume(0.0f);
                 return;
             }
-            double distance = Math.sqrt(client.player.squaredDistanceTo(this.pos.toCenterPos()));
-            float masterVol = client.options.getSoundVolume(SoundCategory.MASTER);
+            double distance = Math.sqrt(client.player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(this.pos)));
+            float masterVol = client.options.getFinalSoundSourceVolume(SoundSource.MASTER);
             if (masterVol == 0.0f || distance > (double)this.maxDistance) {
                 this.setVolume(0.0f);
             } else {

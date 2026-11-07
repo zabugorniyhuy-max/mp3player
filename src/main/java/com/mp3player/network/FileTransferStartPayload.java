@@ -13,19 +13,19 @@
 package com.mp3player.network;
 
 import java.util.UUID;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Uuids;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record FileTransferStartPayload(String fileName, long fileSize, int totalChunks, UUID sender, UUID target) implements CustomPayload
+public record FileTransferStartPayload(String fileName, long fileSize, int totalChunks, UUID sender, UUID target) implements CustomPacketPayload
 {
-    public static final CustomPayload.Id<FileTransferStartPayload> PACKET_ID = new CustomPayload.Id(Identifier.of((String)"mp3player", (String)"file_transfer_start"));
-    public static final PacketCodec<RegistryByteBuf, FileTransferStartPayload> CODEC = PacketCodec.tuple((PacketCodec)PacketCodecs.STRING, FileTransferStartPayload::fileName, (PacketCodec)PacketCodecs.VAR_LONG, FileTransferStartPayload::fileSize, (PacketCodec)PacketCodecs.INTEGER, FileTransferStartPayload::totalChunks, (PacketCodec)Uuids.PACKET_CODEC, FileTransferStartPayload::sender, (PacketCodec)Uuids.PACKET_CODEC, FileTransferStartPayload::target, FileTransferStartPayload::new);
+    public static final CustomPacketPayload.Type<FileTransferStartPayload> PACKET_ID = new CustomPacketPayload.Type(Identifier.fromNamespaceAndPath((String)"mp3player", (String)"file_transfer_start"));
+    public static final StreamCodec<RegistryFriendlyByteBuf, FileTransferStartPayload> CODEC = StreamCodec.composite((StreamCodec)ByteBufCodecs.STRING_UTF8, FileTransferStartPayload::fileName, (StreamCodec)ByteBufCodecs.VAR_LONG, FileTransferStartPayload::fileSize, (StreamCodec)ByteBufCodecs.INT, FileTransferStartPayload::totalChunks, (StreamCodec)UUIDUtil.STREAM_CODEC, FileTransferStartPayload::sender, (StreamCodec)UUIDUtil.STREAM_CODEC, FileTransferStartPayload::target, FileTransferStartPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return PACKET_ID;
     }
 }

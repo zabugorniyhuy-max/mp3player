@@ -12,16 +12,12 @@
  */
 package com.mp3player.client.gui.nanovg;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.texture.GlTexture;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.nanovg.NVGColor;
 import org.lwjgl.nanovg.NVGPaint;
@@ -363,54 +359,7 @@ public class NanoVGEngine {
     }
 
     private int getTargetFramebuffer() {
-        if (this.savedDrawFbo != 0) {
-            return this.savedDrawFbo;
-        }
-        try {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc != null && mc.getFramebuffer() != null) {
-                GpuTexture colorAttachment = mc.getFramebuffer().getColorAttachment();
-                if (colorAttachment instanceof GlTexture glTex) {
-                    int glTexId = glTex.getGlId();
-                    if (glTexId > 0) {
-                        int fbW = mc.getWindow().getFramebufferWidth();
-                        int fbH = mc.getWindow().getFramebufferHeight();
-                        if (fbW <= 0 || fbH <= 0) {
-                            fbW = mc.getFramebuffer().textureWidth;
-                            fbH = mc.getFramebuffer().textureHeight;
-                        }
-                        if (this.helperFbo == 0 || !GL30.glIsFramebuffer(this.helperFbo)) {
-                            this.helperFbo = GL30.glGenFramebuffers();
-                        }
-                        if (this.helperRbo == 0 || !GL30.glIsRenderbuffer(this.helperRbo)) {
-                            this.helperRbo = GL30.glGenRenderbuffers();
-                        }
-
-                        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.helperFbo);
-                        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, glTexId, 0);
-
-                        if (this.helperWidth != fbW || this.helperHeight != fbH) {
-                            this.helperWidth = fbW;
-                            this.helperHeight = fbH;
-                            GL30.glBindRenderbuffer(GL30.GL_RENDERBUFFER, this.helperRbo);
-                            GL30.glRenderbufferStorage(GL30.GL_RENDERBUFFER, GL30.GL_DEPTH24_STENCIL8, fbW, fbH);
-                            GL30.glFramebufferRenderbuffer(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL30.GL_RENDERBUFFER, this.helperRbo);
-                            GL30.glBindRenderbuffer(GL30.GL_RENDERBUFFER, 0);
-                        }
-
-                        int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
-                        if (status == GL30.GL_FRAMEBUFFER_COMPLETE) {
-                            return this.helperFbo;
-                        } else {
-                            com.mp3player.MP3PlayerClient.LOGGER.warn("[NanoVG] Helper FBO not complete: status=" + status);
-                        }
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            com.mp3player.MP3PlayerClient.LOGGER.warn("[NanoVG] Could not resolve target framebuffer: " + t.getMessage());
-        }
-        return 0;
+        return this.savedDrawFbo;
     }
 
     public void beginFrame(float width, float height, float pixelRatio) {
@@ -510,7 +459,7 @@ public class NanoVGEngine {
 
         this.activeTargetFbo = this.getTargetFramebuffer();
         if (this.activeTargetFbo != 0 && this.activeTargetFbo != this.savedDrawFbo) {
-            GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.activeTargetFbo);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.activeTargetFbo);
         }
 
         if (!this.loggedFirstFrame) {
@@ -551,13 +500,8 @@ public class NanoVGEngine {
             }
         }
 
-        if (this.activeTargetFbo != 0 && this.activeTargetFbo != this.savedDrawFbo) {
-            GlStateManager._glBindFramebuffer(36009, this.savedDrawFbo);
-            GlStateManager._glBindFramebuffer(36008, this.savedReadFbo);
-        } else {
-            GL30.glBindFramebuffer(36009, this.savedDrawFbo);
-            GL30.glBindFramebuffer(36008, this.savedReadFbo);
-        }
+        GL30.glBindFramebuffer(36009, this.savedDrawFbo);
+        GL30.glBindFramebuffer(36008, this.savedReadFbo);
         GL20.glUseProgram((int)this.savedProgram);
         GL30.glBindVertexArray((int)this.savedVao);
         GL15.glBindBuffer((int)34962, (int)this.savedArrayBuffer);

@@ -33,15 +33,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
+import com.mojang.renderpearl.backend.opengl.GlTexture;
 
 public class MainScreen
 extends Screen {
@@ -77,7 +77,7 @@ extends Screen {
     private final long openedTimeMs = System.currentTimeMillis();
 
     public MainScreen() {
-        super((Text)Text.literal((String)"Music Player"));
+        super((Component)Component.literal((String)"Music Player"));
         darkTheme = ModConfig.getInstance().darkTheme;
         NanoVGEngine.getInstance().setDarkTheme(darkTheme);
         this.currentTab = ModConfig.getInstance().currentTab;
@@ -85,7 +85,7 @@ extends Screen {
             this.currentTab = 0;
         }
         this.localPlayer.setVolume(ModConfig.getInstance().musicVolume);
-        this.musicFolder = new File(MinecraftClient.getInstance().runDirectory, "mp3player");
+        this.musicFolder = new File(Minecraft.getInstance().gameDirectory, "mp3player");
         if (!this.musicFolder.exists()) {
             this.musicFolder.mkdirs();
         }
@@ -100,8 +100,8 @@ extends Screen {
     }
 
     private void playClickSound() {
-        if (this.client != null) {
-            this.client.getSoundManager().play((SoundInstance)PositionedSoundInstance.ui(ModSounds.KNOCK, 1.0f));
+        if (this.minecraft != null) {
+            this.minecraft.getSoundManager().play((SoundInstance)SimpleSoundInstance.forUI(ModSounds.KNOCK, 1.0f));
         }
     }
 
@@ -137,20 +137,22 @@ extends Screen {
         return darkTheme ? -14013126 : -3418655;
     }
 
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    @Override
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (!NanoVGEngine.getInstance().isAvailable()) {
             context.fill(0, 0, this.width, this.height, 0x44000000);
         }
     }
 
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        if (this.width <= 0 || this.height <= 0 || this.client == null || this.client.getWindow().getFramebufferWidth() <= 0 || this.client.getWindow().getFramebufferHeight() <= 0) {
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        if (this.width <= 0 || this.height <= 0 || this.minecraft == null || this.minecraft.getWindow().getWidth() <= 0 || this.minecraft.getWindow().getHeight() <= 0) {
             return;
         }
         if (this.isClosing) {
             this.animationProgress -= 0.12f;
             if (this.animationProgress <= 0.0f) {
-                this.close();
+                this.onClose();
                 return;
             }
         } else if (this.animationProgress < 1.0f) {
@@ -170,16 +172,16 @@ extends Screen {
             com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] First render: width=" + this.width + ", height=" + this.height + ", useNvg=" + useNvg);
         }
         if (useNvg) {
-            float scale = (float)this.client.getWindow().getScaleFactor();
+            float scale = (float)this.minecraft.getWindow().getGuiScale();
             nvg.beginFrame(this.width, this.height, scale);
             nvg.drawRoundedRect(0.0f, 0.0f, (float)this.width, (float)this.height, 0.0f, 0x55000000);
             this.renderScreenNanoVG(nvg, mouseX, mouseY, panelX, panelY, panelW, panelH);
             nvg.endFrame();
             return;
         }
-        int tab0W = this.textRenderer.getWidth("Webs / Apps") + 14;
-        int tab1W = this.textRenderer.getWidth(DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440")) + 14;
-        int tab2W = this.textRenderer.getWidth(DrawUtils.t("Fav", "\u0418\u0437\u0431\u0440")) + 14;
+        int tab0W = this.font.width("Webs / Apps") + 14;
+        int tab1W = this.font.width(DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440")) + 14;
+        int tab2W = this.font.width(DrawUtils.t("Fav", "\u0418\u0437\u0431\u0440")) + 14;
         this.drawTab(context, mouseX, mouseY, panelX + 10, panelY - 20, "Webs/Apps", 0, "Webs / Apps");
         this.drawTab(context, mouseX, mouseY, panelX + 10 + tab0W + 4, panelY - 20, DrawUtils.t("MP3", "MP3 \u041f\u043b\u0435\u0435\u0440"), 1, DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440"));
         this.drawTab(context, mouseX, mouseY, panelX + 10 + tab0W + 4 + tab1W + 4, panelY - 20, DrawUtils.t("Fav", "\u0418\u0437\u0431\u0440"), 2, DrawUtils.t("Favorites", "\u041b\u044e\u0431\u0438\u043c\u044b\u0435 \u043f\u0435\u0441\u043d\u0438"));
@@ -196,7 +198,7 @@ extends Screen {
             context.fill(panelX + panelW - 84, panelY + 16, panelX + panelW - 29, panelY + 18, this.accent());
         }
         String title = this.currentTab == 0 ? "Webs / Apps" : (this.currentTab == 1 ? DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440") : (this.currentTab == 2 ? DrawUtils.t("Favorites", "\u041b\u044e\u0431\u0438\u043c\u044b\u0435 \u043f\u0435\u0441\u043d\u0438") : DrawUtils.t("Settings & Help", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0438 \u0421\u043f\u0440\u0430\u0432\u043a\u0430")));
-        DrawUtils.drawText(context, this.textRenderer, title, panelX + 45, panelY + 7, this.accent(), true);
+        DrawUtils.drawText(context, this.font, title, panelX + 45, panelY + 7, this.accent(), true);
         if (this.currentTab == 0) {
             this.renderOnlineTab(context, mouseX, mouseY, panelX, panelY, panelW, panelH);
         } else if (this.currentTab == 1) {
@@ -215,15 +217,15 @@ extends Screen {
         int uploads = FileSenderManager.getInstance().getUploadsCount();
         int downloads = FileReceiverManager.getInstance().getDownloadsCount();
         if (uploads > 0) {
-            DrawUtils.drawText(context, this.textRenderer, DrawUtils.t("Uploading: ", "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432: ") + uploads, panelX + panelW - 120, panelY - 12, this.accent(), true);
+            DrawUtils.drawText(context, this.font, DrawUtils.t("Uploading: ", "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432: ") + uploads, panelX + panelW - 120, panelY - 12, this.accent(), true);
         }
         if (downloads > 0) {
-            DrawUtils.drawText(context, this.textRenderer, DrawUtils.t("Downloading: ", "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435: ") + downloads, panelX + panelW - 120, panelY - 24, -11141291, true);
+            DrawUtils.drawText(context, this.font, DrawUtils.t("Downloading: ", "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435: ") + downloads, panelX + panelW - 120, panelY - 24, -11141291, true);
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
-    private void renderTrackMenu(DrawContext ctx, int mouseX, int mouseY) {
+    private void renderTrackMenu(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         int w = 135;
         int h = 84;
         ctx.fill(this.trackMenuX - 1, this.trackMenuY - 1, this.trackMenuX + w + 1, this.trackMenuY + h + 1, this.border());
@@ -246,15 +248,15 @@ extends Screen {
             if (i == 5) {
                 color = -1096636;
             }
-            DrawUtils.drawText(ctx, this.textRenderer, opts[i], this.trackMenuX + 6, y + 3, color, false);
+            DrawUtils.drawText(ctx, this.font, opts[i], this.trackMenuX + 6, y + 3, color, false);
         }
     }
 
     private int getGsmtcCoverGlId() {
         try {
-            AbstractTexture tex = MinecraftClient.getInstance().getTextureManager().getTexture(GsmtcManager.COVER_TEXTURE_ID);
-            if (tex != null && tex.getGlTexture() instanceof net.minecraft.client.texture.GlTexture glTex) {
-                return glTex.getGlId();
+            AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(GsmtcManager.COVER_TEXTURE_ID);
+            if (tex != null && tex.getTexture() instanceof GlTexture glTex) {
+                return glTex.glId();
             }
         }
         catch (Throwable throwable) {
@@ -265,9 +267,9 @@ extends Screen {
 
     private int getLocalCoverGlId() {
         try {
-            AbstractTexture tex = MinecraftClient.getInstance().getTextureManager().getTexture(AlbumArtExtractor.LOCAL_COVER_TEXTURE_ID);
-            if (tex != null && tex.getGlTexture() instanceof net.minecraft.client.texture.GlTexture glTex) {
-                return glTex.getGlId();
+            AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(AlbumArtExtractor.LOCAL_COVER_TEXTURE_ID);
+            if (tex != null && tex.getTexture() instanceof GlTexture glTex) {
+                return glTex.glId();
             }
         }
         catch (Throwable throwable) {
@@ -956,7 +958,15 @@ extends Screen {
         String searchQuery = !finalArtist.isEmpty() ? finalArtist + " - " + finalTitle : finalTitle;
         try {
             String encoded = URLEncoder.encode(searchQuery, StandardCharsets.UTF_8);
-            Util.getOperatingSystem().open("https://www.google.com/search?q=" + encoded);
+            try {
+                if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                    java.awt.Desktop.getDesktop().browse(new java.net.URI("https://www.google.com/search?q=" + encoded));
+                } else {
+                    new ProcessBuilder("cmd", "/c", "start", "https://www.google.com/search?q=" + encoded).start();
+                }
+            } catch (Throwable t2) {
+                new ProcessBuilder("cmd", "/c", "start", "https://www.google.com/search?q=" + encoded).start();
+            }
             this.downloadStatus = DrawUtils.t("Opened!", "\u041e\u0442\u043a\u0440\u044b\u0442\u043e!");
             this.downloadStatusTimestamp = System.currentTimeMillis();
             this.playClickSound();
@@ -1073,7 +1083,7 @@ extends Screen {
         return false;
     }
 
-    private void renderOnlineTab(DrawContext ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
+    private void renderOnlineTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
         int contentY = py + 26;
         int contentH = ph - 34;
         ctx.fill(px + 9, contentY - 1, px + pw - 9, contentY + contentH + 1, this.border());
@@ -1081,9 +1091,9 @@ extends Screen {
 
         boolean hasTrack = this.gsmtc.isAvailable() && this.gsmtc.hasTrack();
         if (!hasTrack) {
-            ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal(DrawUtils.t("No browser/app music detected", "\u041c\u0443\u0437\u044b\u043a\u0430 \u0438\u0437 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430/\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430")), px + pw / 2, contentY + 30, this.textSecondary());
-            ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal(DrawUtils.t("Open Yandex Music, Spotify, VK, YouTube, etc.", "\u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u042f\u043d\u0434\u0435\u043a\u0441.\u041c\u0443\u0437\u044b\u043a\u0443, Spotify, VK, YouTube \u0438 \u0442.\u0434.")), px + pw / 2, contentY + 50, this.accent());
-            ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal(DrawUtils.t("And start playing in Windows", "\u0418 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u0442\u0440\u0435\u043a \u0432 Windows")), px + pw / 2, contentY + 70, this.textSecondary());
+            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("No browser/app music detected", "\u041c\u0443\u0437\u044b\u043a\u0430 \u0438\u0437 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430/\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430")), px + pw / 2, contentY + 30, this.textSecondary());
+            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("Open Yandex Music, Spotify, VK, YouTube, etc.", "\u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u042f\u043d\u0434\u0435\u043a\u0441.\u041c\u0443\u0437\u044b\u043a\u0443, Spotify, VK, YouTube \u0438 \u0442.\u0434.")), px + pw / 2, contentY + 50, this.accent());
+            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("And start playing in Windows", "\u0418 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u0442\u0440\u0435\u043a \u0432 Windows")), px + pw / 2, contentY + 70, this.textSecondary());
             return;
         }
 
@@ -1094,9 +1104,9 @@ extends Screen {
         String src = this.gsmtc.getSourceApp();
         String status = this.gsmtc.isPlaying() ? DrawUtils.t("Playing", "\u0418\u0433\u0440\u0430\u0435\u0442") : DrawUtils.t("Paused", "\u041f\u0430\u0443\u0437\u0430");
 
-        DrawUtils.drawText(ctx, this.textRenderer, (src.isEmpty() ? "Webs / Apps" : src) + " \u2022 " + status, px + 20, contentY + 12, this.accent(), false);
-        DrawUtils.drawText(ctx, this.textRenderer, title, px + 20, contentY + 28, this.textPrimary(), true);
-        DrawUtils.drawText(ctx, this.textRenderer, artist, px + 20, contentY + 44, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, (src.isEmpty() ? "Webs / Apps" : src) + " \u2022 " + status, px + 20, contentY + 12, this.accent(), false);
+        DrawUtils.drawText(ctx, this.font, title, px + 20, contentY + 28, this.textPrimary(), true);
+        DrawUtils.drawText(ctx, this.font, artist, px + 20, contentY + 44, this.textSecondary(), false);
 
         float fraction = (float)this.gsmtc.getProgressFraction();
         int barX = px + 20;
@@ -1104,54 +1114,54 @@ extends Screen {
         int barW = pw - 40;
         ctx.fill(barX, barY, barX + barW, barY + 4, this.border());
         ctx.fill(barX, barY, barX + (int)((float)barW * Math.min(1.0f, Math.max(0.0f, fraction))), barY + 4, this.accent());
-        DrawUtils.drawText(ctx, this.textRenderer, this.gsmtc.getFormattedPosition(), barX, barY + 6, this.textSecondary(), false);
-        DrawUtils.drawText(ctx, this.textRenderer, this.gsmtc.getFormattedDuration(), barX + barW - 25, barY + 6, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, this.gsmtc.getFormattedPosition(), barX, barY + 6, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, this.gsmtc.getFormattedDuration(), barX + barW - 25, barY + 6, this.textSecondary(), false);
 
         this.drawButton(ctx, mouseX, mouseY, px + pw / 2 - 45, contentY + 85, 24, 16, "|<", 10);
         this.drawButton(ctx, mouseX, mouseY, px + pw / 2 - 15, contentY + 83, 30, 20, this.gsmtc.isPlaying() ? "||" : ">", 11);
         this.drawButton(ctx, mouseX, mouseY, px + pw / 2 + 21, contentY + 85, 24, 16, ">|", 12);
     }
 
-    private void renderSettingsTab(DrawContext ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
+    private void renderSettingsTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
         int contentY = py + 26;
         int contentH = ph - 34;
         ctx.fill(px + 9, contentY - 1, px + pw - 9, contentY + contentH + 1, this.border());
         ctx.fill(px + 10, contentY, px + pw - 10, contentY + contentH, this.bgDark());
 
         int curY = contentY + 10;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Volume: ", "\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c: ") + (int)(this.localPlayer.getVolume() * 100.0f) + "%", px + 20, curY, this.textPrimary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Volume: ", "\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c: ") + (int)(this.localPlayer.getVolume() * 100.0f) + "%", px + 20, curY, this.textPrimary(), false);
         curY += 20;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Speaker Range: ", "\u0420\u0430\u0434\u0438\u0443\u0441 \u043a\u043e\u043b\u043e\u043d\u043a\u0438: ") + ModConfig.getInstance().speakerRange + "m", px + 20, curY, this.textPrimary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Speaker Range: ", "\u0420\u0430\u0434\u0438\u0443\u0441 \u043a\u043e\u043b\u043e\u043d\u043a\u0438: ") + ModConfig.getInstance().speakerRange + "m", px + 20, curY, this.textPrimary(), false);
         curY += 20;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Theme: ", "\u0422\u0435\u043c\u0430: ") + (darkTheme ? DrawUtils.t("Dark", "\u0422\u0435\u043c\u043d\u0430\u044f") : DrawUtils.t("Light", "\u0421\u0432\u0435\u0442\u043b\u0430\u044f")), px + 20, curY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Theme: ", "\u0422\u0435\u043c\u0430: ") + (darkTheme ? DrawUtils.t("Dark", "\u0422\u0435\u043c\u043d\u0430\u044f") : DrawUtils.t("Light", "\u0421\u0432\u0435\u0442\u043b\u0430\u044f")), px + 20, curY, this.textSecondary(), false);
         curY += 16;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Language: ", "\u042f\u0437\u044b\u043a: ") + (ModConfig.getInstance().isEnglish ? "English" : "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"), px + 20, curY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Language: ", "\u042f\u0437\u044b\u043a: ") + (ModConfig.getInstance().isEnglish ? "English" : "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"), px + 20, curY, this.textSecondary(), false);
         curY += 20;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Keybinds:", "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435:"), px + 20, curY, this.accent(), true);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Keybinds:", "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435:"), px + 20, curY, this.accent(), true);
         curY += 14;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Right Shift: Open/Close Menu", "Right Shift: \u041e\u0442\u043a\u0440\u044b\u0442\u044c/\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043c\u0435\u043d\u044e"), px + 20, curY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Right Shift: Open/Close Menu", "Right Shift: \u041e\u0442\u043a\u0440\u044b\u0442\u044c/\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043c\u0435\u043d\u044e"), px + 20, curY, this.textSecondary(), false);
         curY += 12;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("P: Play / Pause", "P: \u041f\u0430\u0443\u0437\u0430 / \u0412\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u0435"), px + 20, curY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("P: Play / Pause", "P: \u041f\u0430\u0443\u0437\u0430 / \u0412\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u0435"), px + 20, curY, this.textSecondary(), false);
         curY += 12;
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("]: Next track  [: Prev track", "]: \u0421\u043b\u0435\u0434. \u0442\u0440\u0435\u043a  [: \u041f\u0440\u0435\u0434. \u0442\u0440\u0435\u043a"), px + 20, curY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("]: Next track  [: Prev track", "]: \u0421\u043b\u0435\u0434. \u0442\u0440\u0435\u043a  [: \u041f\u0440\u0435\u0434. \u0442\u0440\u0435\u043a"), px + 20, curY, this.textSecondary(), false);
     }
 
-    private void renderLocalTab(DrawContext ctx, int mouseX, int mouseY, int px, int py, int pw, int ph, boolean showFavorites) {
+    private void renderLocalTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph, boolean showFavorites) {
         int topY = py + 22;
         List<File> playlist = showFavorites ? this.localPlayer.getFavorites() : this.localPlayer.getPlaylist();
         this.drawButton(ctx, mouseX, mouseY, px + 8, topY - 2, 22, 16, "R", 110);
         this.drawButton(ctx, mouseX, mouseY, px + 34, topY - 2, 22, 16, "DIR", 111);
-        DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Tracks: ", "\u0422\u0440\u0435\u043a\u043e\u0432: ") + playlist.size(), px + 65, topY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Tracks: ", "\u0422\u0440\u0435\u043a\u043e\u0432: ") + playlist.size(), px + 65, topY, this.textSecondary(), false);
         if (this.localPlayer.isConverting()) {
-            DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Converting MP3...", "\u041a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f MP3..."), px + 140, topY, this.accent(), false);
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Converting MP3...", "\u041a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f MP3..."), px + 140, topY, this.accent(), false);
         }
         int listY = topY + 18;
         int listH = ph - 90;
         ctx.fill(px + 9, listY - 1, px + pw - 9, listY + listH + 1, this.border());
         ctx.fill(px + 10, listY, px + pw - 10, listY + listH, this.bgDark());
         if (playlist.isEmpty()) {
-            ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal((String)DrawUtils.t("Add .mp3 or .wav to mp3player folder", "\u0417\u0430\u043a\u0438\u043d\u044c\u0442\u0435 .mp3 \u0438\u043b\u0438 .wav \u0432 \u043f\u0430\u043f\u043a\u0443 mp3player")), px + pw / 2, listY + listH / 2 - 10, this.textSecondary());
-            ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal((String)DrawUtils.t("MP3s are converted automatically", "MP3 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0438\u0440\u0443\u044e\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438")), px + pw / 2, listY + listH / 2 + 5, this.textSecondary());
+            ctx.centeredText(this.font, Component.literal(DrawUtils.t("Add .mp3 or .wav to mp3player folder", "Закиньте .mp3 или .wav в папку mp3player")), px + pw / 2, listY + listH / 2 - 10, this.textSecondary());
+            ctx.centeredText(this.font, Component.literal(DrawUtils.t("MP3s are converted automatically", "MP3 конвертируются автоматически")), px + pw / 2, listY + listH / 2 + 5, this.textSecondary());
         } else {
             int scroll;
             int tY = listY + 2;
@@ -1175,20 +1185,20 @@ extends Screen {
                     name = ((String)name).substring(0, 26) + "..";
                 }
                 String prefix = current ? "> " : (isFav ? "* " : "  ");
-                DrawUtils.drawText(ctx, this.textRenderer, prefix + (String)name, px + 14, tY + 2, current ? this.accent() : this.textPrimary(), false);
+                DrawUtils.drawText(ctx, this.font, prefix + (String)name, px + 14, tY + 2, current ? this.accent() : this.textPrimary(), false);
                 boolean hoverPlay = this.isInside(mouseX, mouseY, px + pw - 55, tY, 15, 12);
                 boolean hoverDel = this.isInside(mouseX, mouseY, px + pw - 38, tY, 15, 12);
                 boolean hoverDots = this.isInside(mouseX, mouseY, px + pw - 22, tY, 15, 12);
                 String playIcon = current ? "||" : ">";
-                DrawUtils.drawText(ctx, this.textRenderer, playIcon, px + pw - 53, tY + 2, hoverPlay ? this.accent() : this.textSecondary(), false);
-                DrawUtils.drawText(ctx, this.textRenderer, "x", px + pw - 36, tY + 2, hoverDel ? -43691 : this.textSecondary(), false);
-                DrawUtils.drawText(ctx, this.textRenderer, ":", px + pw - 20, tY + 2, hoverDots ? this.accent() : this.textSecondary(), false);
+                DrawUtils.drawText(ctx, this.font, playIcon, px + pw - 53, tY + 2, hoverPlay ? this.accent() : this.textSecondary(), false);
+                DrawUtils.drawText(ctx, this.font, "x", px + pw - 36, tY + 2, hoverDel ? -43691 : this.textSecondary(), false);
+                DrawUtils.drawText(ctx, this.font, ":", px + pw - 20, tY + 2, hoverDots ? this.accent() : this.textSecondary(), false);
                 tY += 14;
             }
         }
     }
 
-    private void renderPlayerBar(DrawContext ctx, int mouseX, int mouseY, int px, int py, int pw) {
+    private void renderPlayerBar(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw) {
         int maxLen;
         boolean sm = ModConfig.getInstance().speakerMode;
         boolean hasGsmtc = this.gsmtc.isAvailable() && this.gsmtc.hasTrack();
@@ -1251,23 +1261,23 @@ extends Screen {
         }
         int infoLeftX = px + 4;
         if (fromGsmtc && this.gsmtc.hasCover()) {
-            ctx.drawTexturedQuad(GsmtcManager.COVER_TEXTURE_ID, px + 5, py + 17, 18, 18, 0.0f, 1.0f, 0.0f, 1.0f);
+            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, px + 5, py + 17, 18, 18, 0.0f, 1.0f, 0.0f, 1.0f);
             infoLeftX += 22;
         }
         if (!badge.isEmpty()) {
-            DrawUtils.drawText(ctx, this.textRenderer, "[" + badge + "]", infoLeftX, py + 4, badgeColor, true);
+            DrawUtils.drawText(ctx, this.font, "[" + badge + "]", infoLeftX, py + 4, badgeColor, true);
         }
         if (fromGsmtc) {
             boolean hoverDl = this.isInside(mouseX, mouseY, px + pw - 52, py + 3, 48, 11);
             ctx.fill(px + pw - 52, py + 3, px + pw - 4, py + 14, hoverDl ? this.bgHover() : this.bgDark());
-            DrawUtils.drawText(ctx, this.textRenderer, "v " + DrawUtils.t("Save", "\u0412 \u043f\u043b\u0435\u0435\u0440"), px + pw - 48, py + 4, hoverDl ? this.accent() : this.textSecondary(), false);
+            DrawUtils.drawText(ctx, this.font, "v " + DrawUtils.t("Save", "\u0412 \u043f\u043b\u0435\u0435\u0440"), px + pw - 48, py + 4, hoverDl ? this.accent() : this.textSecondary(), false);
         }
         int n = maxLen = !badge.isEmpty() ? 30 : 38;
         if (((String)trackInfo).length() > maxLen) {
             trackInfo = ((String)trackInfo).substring(0, maxLen - 2) + "..";
         }
         int titleOffset = !badge.isEmpty() ? 15 : 0;
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal((String)trackInfo), centerX + titleOffset, py + 4, this.textPrimary());
+        ctx.centeredText(this.font, Component.literal((String)trackInfo), centerX + titleOffset, py + 4, this.textPrimary());
         int barX = px + 50;
         int barY = py + 16;
         int barW = pw - 100;
@@ -1277,11 +1287,11 @@ extends Screen {
             int barColor = isSpotify ? -14829228 : (isYandex ? -13312 : this.accent());
             ctx.fill(barX, barY, barX + fillW, barY + 4, barColor);
         }
-        DrawUtils.drawText(ctx, this.textRenderer, this.formatTime(posSec) + " / " + this.formatTime(durSec), barX + barW + 4, barY - 2, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, this.formatTime(posSec) + " / " + this.formatTime(durSec), barX + barW + 4, barY - 2, this.textSecondary(), false);
         int btnY = py + 32;
         int btnS = 16;
         int gap = 4;
-        int btnW_10 = this.textRenderer.getWidth("-10") + 8;
+        int btnW_10 = this.font.width("-10") + 8;
         int totalW = btnS * 3 + btnW_10 * 2 + gap * 4;
         int btnX = centerX - totalW / 2;
         if (sm) {
@@ -1295,52 +1305,52 @@ extends Screen {
         this.drawButton(ctx, mouseX, mouseY, btnX + btnS * 2 + gap * 2 + btnW_10 * 2 + gap * 2, btnY, btnS, btnS, ">|", 54);
         if (sm) {
             int rangeX = px + 5;
-            DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Range", "\u0420\u0430\u0434\u0438\u0443\u0441"), rangeX, btnY - 5, this.textSecondary(), false);
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Range", "\u0420\u0430\u0434\u0438\u0443\u0441"), rangeX, btnY - 5, this.textSecondary(), false);
             ctx.fill(rangeX, btnY + 5, rangeX + 45, btnY + 9, this.bgDark());
             int maxRange = 64;
             int minRange = 8;
             float rProgress = (float)(ModConfig.getInstance().speakerRange - minRange) / (float)(maxRange - minRange);
             ctx.fill(rangeX, btnY + 5, rangeX + (int)(rProgress * 45.0f), btnY + 9, this.accent());
             int volX = px + pw - 60;
-            DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX, btnY - 5, this.textSecondary(), false);
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX, btnY - 5, this.textSecondary(), false);
             ctx.fill(volX, btnY + 5, volX + 45, btnY + 9, this.bgDark());
             ctx.fill(volX, btnY + 5, volX + (int)(vol * 45.0f), btnY + 9, this.accent());
         } else {
             int volX = px + pw - 70;
-            DrawUtils.drawText(ctx, this.textRenderer, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX - 10, btnY + 3, this.textSecondary(), false);
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX - 10, btnY + 3, this.textSecondary(), false);
             ctx.fill(volX, btnY + 5, volX + 55, btnY + 9, this.bgDark());
             ctx.fill(volX, btnY + 5, volX + (int)(vol * 55.0f), btnY + 9, this.accent());
         }
     }
 
-    private void drawTab(DrawContext ctx, int mouseX, int mouseY, int x, int y, String label, int idx, String tooltip) {
+    private void drawTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, String label, int idx, String tooltip) {
         boolean sel;
-        int w = this.textRenderer.getWidth(label) + 20;
+        int w = this.font.width(label) + 20;
         boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + 20;
         boolean bl = sel = this.currentTab == idx;
         ctx.fill(x, y, x + w, y + 20, sel ? this.bgPanel() : (hover ? this.bgHover() : this.bgButton()));
         if (sel) {
             ctx.fill(x, y, x + w, y + 2, this.accent());
         }
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal((String)label), x + w / 2, y + 6, sel ? this.accent() : this.textSecondary());
+        ctx.centeredText(this.font, (Component)Component.literal((String)label), x + w / 2, y + 6, sel ? this.accent() : this.textSecondary());
     }
 
-    private void drawButton(DrawContext ctx, int mouseX, int mouseY, int x, int y, int w, int h, String icon, int id) {
+    private void drawButton(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, int w, int h, String icon, int id) {
         this.drawButton(ctx, mouseX, mouseY, x, y, w, h, icon, id, this.textSecondary());
     }
 
-    private void drawButton(DrawContext ctx, int mouseX, int mouseY, int x, int y, int w, int h, String icon, int id, int color) {
+    private void drawButton(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, int w, int h, String icon, int id, int color) {
         boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
         boolean pressed = this.pressedButtons.contains(id);
         ctx.fill(x, y, x + w, y + h, pressed ? -11184811 : (hover ? this.bgHover() : this.bgButton()));
         if (hover && !pressed) {
             ctx.fill(x, y + h - 2, x + w, y + h, this.accent());
         }
-        DrawUtils.drawText(ctx, this.textRenderer, icon, x + w / 2 - this.textRenderer.getWidth(icon) / 2, y + (h - 8) / 2, hover ? this.accent() : color, false);
+        DrawUtils.drawText(ctx, this.font, icon, x + w / 2 - this.font.width(icon) / 2, y + (h - 8) / 2, hover ? this.accent() : color, false);
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean bl) {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent click, boolean bl) {
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -1465,20 +1475,28 @@ extends Screen {
         } else if (option == 1) {
             this.localPlayer.toggleRepeat();
         } else if (option == 2) {
-            if (this.client != null && trackFile != null) {
-                this.client.setScreen((Screen)new MusicDiscScreen(this, trackFile));
+            if (this.minecraft != null && trackFile != null) {
+                this.minecraft.gui.setScreen((Screen)new MusicDiscScreen(this, trackFile));
             }
         } else if (option == 3) {
             if (trackFile != null) {
                 try {
                     String q = URLEncoder.encode(trackFile.getName().replace(".mp3", "").replace(".wav", ""), StandardCharsets.UTF_8);
-                    Util.getOperatingSystem().open("https://www.google.com/search?q=" + q);
+                    try {
+                        if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                            java.awt.Desktop.getDesktop().browse(new java.net.URI("https://www.google.com/search?q=" + q));
+                        } else {
+                            new ProcessBuilder("cmd", "/c", "start", "https://www.google.com/search?q=" + q).start();
+                        }
+                    } catch (Throwable t2) {
+                        new ProcessBuilder("cmd", "/c", "start", "https://www.google.com/search?q=" + q).start();
+                    }
                 }
                 catch (Exception exception) {}
             }
         } else if (option == 4) {
-            if (trackFile != null && this.client != null) {
-                this.client.setScreen((Screen)new ShareScreen(this, trackFile));
+            if (trackFile != null && this.minecraft != null) {
+                this.minecraft.gui.setScreen((Screen)new ShareScreen(this, trackFile));
             }
         } else if (option == 5) {
             this.deleteTrackFile(trackFile);
@@ -1660,7 +1678,7 @@ extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(net.minecraft.client.gui.Click click) {
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent click) {
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -1692,7 +1710,7 @@ extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(net.minecraft.client.gui.Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent click, double deltaX, double deltaY) {
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -1792,13 +1810,13 @@ extends Screen {
     }
 
     @Override
-    public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent input) {
         int keyCode = input.key();
         if (keyCode == 256) {
             this.startClosing();
             return true;
         }
-        if ((keyCode == 344 || (com.mp3player.client.KeyInputHandler.openMenuKeyBinding != null && com.mp3player.client.KeyInputHandler.openMenuKeyBinding.matchesKey(input))) 
+        if ((keyCode == 344 || (com.mp3player.client.KeyInputHandler.openMenuKeyBinding != null && com.mp3player.client.KeyInputHandler.openMenuKeyBinding.matches(input))) 
                 && System.currentTimeMillis() - this.openedTimeMs > 350L) {
             this.startClosing();
             return true;
@@ -1829,13 +1847,13 @@ extends Screen {
 
     public void startClosing() {
         com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] startClosing() called, closing screen!");
-        this.close();
+        this.onClose();
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] close() called");
-        super.close();
+        super.onClose();
     }
 
     @Override
@@ -1844,7 +1862,7 @@ extends Screen {
         super.removed();
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

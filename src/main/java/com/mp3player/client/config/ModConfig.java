@@ -18,7 +18,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -43,7 +43,7 @@ public class ModConfig {
     }
 
     public static void load() {
-        configFile = new File(MinecraftClient.getInstance().runDirectory, "config/mp3player.json");
+        configFile = new File(Minecraft.getInstance().gameDirectory, "config/mp3player.json");
         if (configFile.exists()) {
             try (FileReader reader = new FileReader(configFile);){
                 instance = (ModConfig)GSON.fromJson((Reader)reader, ModConfig.class);

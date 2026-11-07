@@ -10,6 +10,7 @@
  */
 package com.mp3player.client.audio;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mp3player.client.gui.nanovg.NanoVGEngine;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -20,14 +21,13 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.AbstractTexture;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.Identifier;
 
 public class AlbumArtExtractor {
-    public static final Identifier LOCAL_COVER_TEXTURE_ID = Identifier.of((String)"mp3player", (String)"local_album_art");
+    public static final Identifier LOCAL_COVER_TEXTURE_ID = Identifier.fromNamespaceAndPath((String)"mp3player", (String)"local_album_art");
 
     public static void loadCoverForFile(File file, String trackTitle, String trackArtist) {
         new Thread(() -> {
@@ -39,7 +39,7 @@ public class AlbumArtExtractor {
                     String rawName = file.getName();
                     int dot = rawName.lastIndexOf(46);
                     String finalBaseName = dot > 0 ? rawName.substring(0, dot) : rawName;
-                    File mainDir = new File(MinecraftClient.getInstance().runDirectory, "mp3player");
+                    File mainDir = new File(Minecraft.getInstance().gameDirectory, "mp3player");
                     File convDir = new File(mainDir, "converted");
                     for (File dir : searchDirs = new File[]{file.getParentFile(), mainDir, convDir, file.getParentFile().getParentFile()}) {
                         if (dir == null || !dir.exists() || !dir.isDirectory()) continue;
@@ -65,13 +65,13 @@ public class AlbumArtExtractor {
                 if (imgBytes != null && imgBytes.length > 0) {
                     byte[] b = imgBytes;
                     NanoVGEngine.getInstance().updateLocalCoverImage(b);
-                    MinecraftClient.getInstance().execute(() -> {
+                    Minecraft.getInstance().execute(() -> {
                         try {
                             NativeImage img = NativeImage.read((InputStream)new ByteArrayInputStream(b));
                             if (img != null) {
-                                NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "local_album_art", img);
+                                DynamicTexture tex = new DynamicTexture(() -> "local_album_art", img);
                                 tex.upload();
-                                MinecraftClient.getInstance().getTextureManager().registerTexture(LOCAL_COVER_TEXTURE_ID, (AbstractTexture)tex);
+                                Minecraft.getInstance().getTextureManager().register(LOCAL_COVER_TEXTURE_ID, (AbstractTexture)tex);
                             }
                         }
                         catch (Throwable throwable) {
@@ -121,13 +121,13 @@ public class AlbumArtExtractor {
                     imgConn.setReadTimeout(4000);
                     if (imgConn.getResponseCode() == 200 && (bytes = imgConn.getInputStream().readAllBytes()) != null && bytes.length > 0) {
                         NanoVGEngine.getInstance().updateLocalCoverImage(bytes);
-                        MinecraftClient.getInstance().execute(() -> {
+                        Minecraft.getInstance().execute(() -> {
                             try {
                                 NativeImage img = NativeImage.read((InputStream)new ByteArrayInputStream(bytes));
                                 if (img != null) {
-                                    NativeImageBackedTexture tex = new NativeImageBackedTexture(() -> "local_album_art", img);
+                                    DynamicTexture tex = new DynamicTexture(() -> "local_album_art", img);
                                     tex.upload();
-                                    MinecraftClient.getInstance().getTextureManager().registerTexture(LOCAL_COVER_TEXTURE_ID, (AbstractTexture)tex);
+                                    Minecraft.getInstance().getTextureManager().register(LOCAL_COVER_TEXTURE_ID, (AbstractTexture)tex);
                                 }
                             }
                             catch (Throwable throwable) {

@@ -26,11 +26,11 @@ import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineEvent;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.sound.SoundCategory;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 
 public class GlobalAudioTracker {
     private static final GlobalAudioTracker INSTANCE = new GlobalAudioTracker();
@@ -72,7 +72,7 @@ public class GlobalAudioTracker {
             File[] files;
             File mainFolder;
             File[] files2;
-            File convertedFolder = new File(new File(MinecraftClient.getInstance().runDirectory, "mp3player"), "converted");
+            File convertedFolder = new File(new File(Minecraft.getInstance().gameDirectory, "mp3player"), "converted");
             if (convertedFolder.exists() && (files2 = convertedFolder.listFiles()) != null) {
                 for (File f : files2) {
                     String n;
@@ -82,7 +82,7 @@ public class GlobalAudioTracker {
                     break;
                 }
             }
-            if (trackFile == null && (mainFolder = new File(MinecraftClient.getInstance().runDirectory, "mp3player")).exists() && (files = mainFolder.listFiles()) != null) {
+            if (trackFile == null && (mainFolder = new File(Minecraft.getInstance().gameDirectory, "mp3player")).exists() && (files = mainFolder.listFiles()) != null) {
                 for (File f : files) {
                     String n;
                     int d;
@@ -178,7 +178,7 @@ public class GlobalAudioTracker {
             if (System.currentTimeMillis() - this.lastRequestTime > 10000L) {
                 this.lastRequestTime = System.currentTimeMillis();
                 try {
-                    ClientPlayNetworking.send((CustomPayload)new RequestTrackPayload(this.trackName, this.uuid));
+                    ClientPlayNetworking.send((CustomPacketPayload)new RequestTrackPayload(this.trackName, this.uuid));
                 }
                 catch (Exception exception) {
                     // empty catch block
@@ -253,26 +253,26 @@ public class GlobalAudioTracker {
 
         public void updateVolume() {
             if (this.currentClip != null && this.isPlaying && !this.stubMode) {
-                MinecraftClient client = MinecraftClient.getInstance();
-                if (client.player == null || client.world == null) {
+                Minecraft client = Minecraft.getInstance();
+                if (client.player == null || client.level == null) {
                     this.setVolume(0.0f);
                     return;
                 }
-                float masterVol = client.options.getSoundVolume(SoundCategory.MASTER);
+                float masterVol = client.options.getFinalSoundSourceVolume(SoundSource.MASTER);
                 if (masterVol == 0.0f) {
                     this.setVolume(0.0f);
                     return;
                 }
-                if (client.player.getUuid().equals(this.uuid)) {
+                if (client.player.getUUID().equals(this.uuid)) {
                     this.setVolume(masterVol);
                     return;
                 }
-                PlayerEntity target = client.world.getPlayerByUuid(this.uuid);
+                Player target = client.level.getPlayerByUUID(this.uuid);
                 if (target == null) {
                     this.setVolume(0.0f);
                     return;
                 }
-                double distance = Math.sqrt(client.player.squaredDistanceTo((Entity)target));
+                double distance = Math.sqrt(client.player.distanceToSqr((Entity)target));
                 if (distance > (double)this.maxDistance) {
                     this.setVolume(0.0f);
                 } else {

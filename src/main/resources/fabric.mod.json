@@ -3,7 +3,7 @@
     "id": "mp3player",
     "version": "${version}",
     "name": "MP3 Player",
-    "description": "MP3 Player for Minecraft. Press Right Shift to open.",
+    "description": "MP3 Player for Minecraft 26.3. Press Right Shift to open.",
     "authors": ["MP3Player Dev"],
     "contact": {},
     "license": "MIT",
@@ -16,9 +16,9 @@
         "mp3player.mixins.json"
     ],
     "depends": {
-        "fabricloader": ">=0.16.0",
+        "fabricloader": ">=0.19.0",
         "fabric-api": "*",
-        "minecraft": ">=1.21.1 <=1.21.11",
+        "minecraft": ">=26.3",
         "java": ">=21"
     }
 }

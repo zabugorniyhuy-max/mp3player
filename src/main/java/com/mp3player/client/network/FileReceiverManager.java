@@ -14,8 +14,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 public class FileReceiverManager {
     private static final FileReceiverManager INSTANCE = new FileReceiverManager();
@@ -28,12 +28,12 @@ public class FileReceiverManager {
     public void startDownload(String fileName, long fileSize, int totalChunks, UUID sender) {
         File targetFile;
         String key = sender.toString() + "_" + fileName;
-        File musicFolder = new File(MinecraftClient.getInstance().runDirectory, "mp3player");
+        File musicFolder = new File(Minecraft.getInstance().gameDirectory, "mp3player");
         if (!musicFolder.exists()) {
             musicFolder.mkdirs();
         }
         if ((targetFile = new File(musicFolder, fileName)).exists()) {
-            MusicPlayer.getInstance().loadMusicFolder(new File(MinecraftClient.getInstance().runDirectory, "mp3player"));
+            MusicPlayer.getInstance().loadMusicFolder(new File(Minecraft.getInstance().gameDirectory, "mp3player"));
             return;
         }
         File tempFile = new File(musicFolder, fileName + ".downloading");
@@ -63,9 +63,9 @@ public class FileReceiverManager {
         ReceiveTask task = this.activeDownloads.remove(key);
         if (task != null) {
             task.finish();
-            MusicPlayer.getInstance().loadMusicFolder(new File(MinecraftClient.getInstance().runDirectory, "mp3player"));
-            if (MinecraftClient.getInstance().player != null) {
-                MinecraftClient.getInstance().player.sendMessage((Text)Text.literal((String)("\u00a7a\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u0430 \u043d\u043e\u0432\u0430\u044f \u043f\u0435\u0441\u043d\u044f: \u00a7e" + fileName)), false);
+            MusicPlayer.getInstance().loadMusicFolder(new File(Minecraft.getInstance().gameDirectory, "mp3player"));
+            if (Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.sendSystemMessage((Component)Component.literal((String)("\u00a7a\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u0430 \u043d\u043e\u0432\u0430\u044f \u043f\u0435\u0441\u043d\u044f: \u00a7e" + fileName)));
             }
         }
     }

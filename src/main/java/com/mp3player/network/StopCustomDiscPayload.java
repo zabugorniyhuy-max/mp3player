@@ -11,19 +11,19 @@
  */
 package com.mp3player.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record StopCustomDiscPayload(BlockPos pos) implements CustomPayload
+public record StopCustomDiscPayload(BlockPos pos) implements CustomPacketPayload
 {
-    public static final Identifier ID = Identifier.of((String)"mp3player", (String)"stop_custom_disc");
-    public static final CustomPayload.Id<StopCustomDiscPayload> PACKET_ID = new CustomPayload.Id(ID);
-    public static final PacketCodec<RegistryByteBuf, StopCustomDiscPayload> CODEC = PacketCodec.tuple((PacketCodec)BlockPos.PACKET_CODEC, StopCustomDiscPayload::pos, StopCustomDiscPayload::new);
+    public static final Identifier ID = Identifier.fromNamespaceAndPath((String)"mp3player", (String)"stop_custom_disc");
+    public static final CustomPacketPayload.Type<StopCustomDiscPayload> PACKET_ID = new CustomPacketPayload.Type(ID);
+    public static final StreamCodec<RegistryFriendlyByteBuf, StopCustomDiscPayload> CODEC = StreamCodec.composite((StreamCodec)BlockPos.STREAM_CODEC, StopCustomDiscPayload::pos, StopCustomDiscPayload::new);
 
-    public CustomPayload.Id<? extends CustomPayload> getId() {
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
         return PACKET_ID;
     }
 }

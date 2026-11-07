@@ -1,9 +1,9 @@
 plugins {
-    id 'fabric-loom' version '1.13.6'
+    id 'net.fabricmc.fabric-loom' version '1.18.4'
     id 'maven-publish'
 }
 
-version = '1.21.11'
+version = '26.3'
 group = 'com.mp3player'
 
 repositories {
@@ -23,10 +23,9 @@ configurations {
 }
 
 dependencies {
-    minecraft "com.mojang:minecraft:1.21.11"
-    mappings "net.fabricmc:yarn:1.21.11+build.6:v2"
-    modImplementation "net.fabricmc:fabric-loader:0.16.10"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.6+1.21.11"
+    minecraft "com.mojang:minecraft:26.3"
+    implementation "net.fabricmc:fabric-loader:0.19.5"
+    implementation "net.fabricmc.fabric-api:fabric-api:0.165.0+26.3"
 
     bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3"
     bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-windows"
@@ -44,24 +43,27 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 25
     it.options.encoding = "UTF-8"
 }
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
 jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from {
         configurations.bundleLib.collect { it.isDirectory() ? it : zipTree(it) }
     } {
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        exclude "META-INF/*.SF"
+        exclude "META-INF/*.DSA"
+        exclude "META-INF/*.RSA"
     }
 }
 
-tasks.withType(Jar).configureEach {
-    destinationDirectory = file("../libs/1.21.11")
+test {
+    enabled = false
 }
