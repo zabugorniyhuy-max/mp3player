@@ -1,70 +1,74 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.minecraft.client.MinecraftClient
+ */
 package com.mp3player.client.audio;
 
 import com.mp3player.MP3PlayerClient;
-import net.minecraft.client.MinecraftClient;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.client.MinecraftClient;
 
 public class AudioConverter {
     private static File ffmpegExe = null;
     private static boolean ffmpegChecked = false;
-    
+
     public static boolean isConvertible(File file) {
-        if (file == null) return false;
+        if (file == null) {
+            return false;
+        }
         String name = file.getName().toLowerCase();
-        return name.endsWith(".mp3") || name.endsWith(".flac") || 
-               name.endsWith(".ogg") || name.endsWith(".m4a") || 
-               name.endsWith(".wma") || name.endsWith(".aac");
+        return name.endsWith(".mp3") || name.endsWith(".flac") || name.endsWith(".ogg") || name.endsWith(".m4a") || name.endsWith(".wma") || name.endsWith(".aac");
     }
-    
-    /**
-     * Извлекает FFmpeg из ресурсов мода в папку игры
+
+    /*
+     * Enabled aggressive block sorting
+     * Enabled unnecessary exception pruning
+     * Enabled aggressive exception aggregation
      */
     private static File extractFFmpeg() {
         File gameDir = MinecraftClient.getInstance().runDirectory;
         File mp3playerDir = new File(gameDir, "mp3player");
         File ffmpegFile = new File(mp3playerDir, "ffmpeg.exe");
-        
-        // Если уже извлечён и размер похож на правду (FFmpeg весит десятки МБ) - возвращаем
         if (ffmpegFile.exists()) {
-            if (ffmpegFile.length() > 5_000_000) { // Минимум 5 МБ
+            if (ffmpegFile.length() > 5000000L) {
                 return ffmpegFile;
-            } else {
-                MP3PlayerClient.LOGGER.warn("FFmpeg file is too small (corrupted?), extracting again...");
-                ffmpegFile.delete();
             }
+            MP3PlayerClient.LOGGER.warn("FFmpeg file is too small (corrupted?), extracting again...");
+            ffmpegFile.delete();
         }
-        
         if (!mp3playerDir.exists()) {
             mp3playerDir.mkdirs();
         }
-        
         MP3PlayerClient.LOGGER.info("Extracting FFmpeg...");
-        
-        try (InputStream in = AudioConverter.class.getResourceAsStream("/ffmpeg.exe")) {
+        try (InputStream in = AudioConverter.class.getResourceAsStream("/ffmpeg.exe");){
             if (in == null) {
                 MP3PlayerClient.LOGGER.error("FFmpeg not found in mod resources!");
-                return null;
+                File file2 = null;
+                return file2;
             }
-            
             Files.copy(in, ffmpegFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            MP3PlayerClient.LOGGER.info("FFmpeg extracted to: {}", ffmpegFile.getAbsolutePath());
-            return ffmpegFile;
-            
-        } catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Failed to extract FFmpeg: {}", e.getMessage());
+            MP3PlayerClient.LOGGER.info("FFmpeg extracted to: {}", (Object)ffmpegFile.getAbsolutePath());
+            File file = ffmpegFile;
+            return file;
+        }
+        catch (Exception e) {
+            MP3PlayerClient.LOGGER.error("Failed to extract FFmpeg: {}", (Object)e.getMessage());
             return null;
         }
     }
-    
+
     public static boolean isFFmpegAvailable() {
         if (!ffmpegChecked) {
             ffmpegChecked = true;
-            ffmpegExe = extractFFmpeg();
-            
+            ffmpegExe = AudioConverter.extractFFmpeg();
             if (ffmpegExe != null && ffmpegExe.exists()) {
                 MP3PlayerClient.LOGGER.info("FFmpeg ready! MP3 conversion enabled.");
             } else {
@@ -73,10 +77,7 @@ public class AudioConverter {
         }
         return ffmpegExe != null && ffmpegExe.exists();
     }
-    
-    /**
-     * Возвращает папку для конвертированных WAV файлов
-     */
+
     public static File getConvertedFolder() {
         File gameDir = MinecraftClient.getInstance().runDirectory;
         File convertedDir = new File(gameDir, "mp3player/converted");
@@ -85,116 +86,83 @@ public class AudioConverter {
         }
         return convertedDir;
     }
-    
-    /**
-     * Конвертирует MP3 в WAV используя FFmpeg
-     * WAV поддерживается Java нативно
-     */
+
     public static File convertToWav(File mp3File) {
-        if (!isFFmpegAvailable()) {
+        if (!AudioConverter.isFFmpegAvailable()) {
             return null;
         }
-        
         String name = mp3File.getName();
-        String baseName = name.substring(0, name.lastIndexOf('.'));
-        
-        // WAV файлы создаются в отдельной папке converted
-        File convertedDir = getConvertedFolder();
+        String baseName = name.substring(0, name.lastIndexOf(46));
+        File convertedDir = AudioConverter.getConvertedFolder();
         File wavFile = new File(convertedDir, baseName + ".wav");
-        
-        // Если WAV уже существует, просто удаляем исходный MP3 чтобы не мешался
         if (wavFile.exists()) {
-            MP3PlayerClient.LOGGER.info("WAV already exists, deleting MP3: {}", wavFile.getName());
+            MP3PlayerClient.LOGGER.info("WAV already exists, deleting MP3: {}", (Object)wavFile.getName());
             mp3File.delete();
             return wavFile;
         }
-        
-        MP3PlayerClient.LOGGER.info("Converting {} to WAV...", name);
-        
+        MP3PlayerClient.LOGGER.info("Converting {} to WAV...", (Object)name);
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                ffmpegExe.getAbsolutePath(),
-                "-i", mp3File.getAbsolutePath(),
-                "-vn", // Отключаем видео (обложки)
-                "-sn", // Отключаем субтитры
-                "-acodec", "pcm_s16le",
-                "-ar", "44100",
-                "-ac", "2",
-                "-y",
-                wavFile.getAbsolutePath()
-            );
-            pb.redirectErrorStream(true);
-            
-            Process process = pb.start();
-            
-            // Читаем вывод чтобы процесс не завис
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
+            ProcessBuilder pb = new ProcessBuilder(ffmpegExe.getAbsolutePath(), "-i", mp3File.getAbsolutePath(), "-vn", "-sn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", "-y", wavFile.getAbsolutePath());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             while ((line = reader.readLine()) != null) {
-                MP3PlayerClient.LOGGER.debug("FFmpeg: {}", line);
+                MP3PlayerClient.LOGGER.debug("FFmpeg: {}", (Object)line);
             }
-            
             int exitCode = process.waitFor();
-            
             if (exitCode == 0 && wavFile.exists()) {
-                MP3PlayerClient.LOGGER.info("Converted: {} -> {}", name, wavFile.getName());
-                mp3File.delete(); // Удаляем исходный MP3 файл после успешной конвертации
+                MP3PlayerClient.LOGGER.info("Converted: {} -> {}", (Object)name, (Object)wavFile.getName());
+                mp3File.delete();
                 return wavFile;
-            } else {
-                MP3PlayerClient.LOGGER.error("FFmpeg conversion failed with code: {}", exitCode);
             }
-        } catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Conversion error: {}", e.getMessage());
+            MP3PlayerClient.LOGGER.error("FFmpeg conversion failed with code: {}", (Object)exitCode);
         }
-        
+        catch (Exception e) {
+            MP3PlayerClient.LOGGER.error("Conversion error: {}", (Object)e.getMessage());
+        }
         return null;
     }
-    
-    /**
-     * Для совместимости - вызывает convertToWav
-     */
+
     public static File convertToOgg(File mp3File) {
-        return convertToWav(mp3File);
+        return AudioConverter.convertToWav(mp3File);
     }
-    
-    /**
-     * Асинхронная конвертация
-     */
+
     public static CompletableFuture<File> convertToOggAsync(File mp3File) {
-        return CompletableFuture.supplyAsync(() -> convertToOgg(mp3File));
+        return CompletableFuture.supplyAsync(() -> AudioConverter.convertToOgg(mp3File));
     }
-    
-    /**
-     * Конвертирует все MP3 файлы в папке
-     */
+
     public static void convertAllMp3InFolder(File folder, Runnable onComplete) {
-        if (!isFFmpegAvailable() || folder == null || !folder.exists()) {
-            MP3PlayerClient.LOGGER.warn("Cannot convert: FFmpeg={}, folder={}", 
-                isFFmpegAvailable(), folder != null ? folder.exists() : "null");
-            if (onComplete != null) onComplete.run();
+        if (!AudioConverter.isFFmpegAvailable() || folder == null || !folder.exists()) {
+            MP3PlayerClient.LOGGER.warn("Cannot convert: FFmpeg={}, folder={}", (Object)AudioConverter.isFFmpegAvailable(), folder != null ? Boolean.valueOf(folder.exists()) : "null");
+            if (onComplete != null) {
+                onComplete.run();
+            }
             return;
         }
-        
-        File[] mp3Files = folder.listFiles((dir, name) -> isConvertible(new java.io.File(dir, name)));
+        File[] mp3Files = folder.listFiles((dir, name) -> AudioConverter.isConvertible(new File(dir, name)));
         if (mp3Files == null || mp3Files.length == 0) {
             MP3PlayerClient.LOGGER.info("No audio files to convert");
-            if (onComplete != null) onComplete.run();
+            if (onComplete != null) {
+                onComplete.run();
+            }
             return;
         }
-        
-        MP3PlayerClient.LOGGER.info("Found {} audio files to convert", mp3Files.length);
-        
+        MP3PlayerClient.LOGGER.info("Found {} audio files to convert", (Object)mp3Files.length);
         CompletableFuture.runAsync(() -> {
             try {
                 int converted = 0;
                 for (File mp3 : mp3Files) {
-                    File result = convertToWav(mp3);
-                    if (result != null) converted++;
+                    File result = AudioConverter.convertToWav(mp3);
+                    if (result == null) continue;
+                    ++converted;
                 }
-                MP3PlayerClient.LOGGER.info("Conversion complete! {} of {} files converted", converted, mp3Files.length);
-            } catch (Exception e) {
-                MP3PlayerClient.LOGGER.error("Error during batch conversion: {}", e.getMessage());
-            } finally {
+                MP3PlayerClient.LOGGER.info("Conversion complete! {} of {} files converted", (Object)converted, (Object)mp3Files.length);
+            }
+            catch (Exception e) {
+                MP3PlayerClient.LOGGER.error("Error during batch conversion: {}", (Object)e.getMessage());
+            }
+            finally {
                 if (onComplete != null) {
                     onComplete.run();
                 }
@@ -202,3 +170,4 @@ public class AudioConverter {
         });
     }
 }
+

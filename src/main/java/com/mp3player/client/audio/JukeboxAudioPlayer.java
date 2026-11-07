@@ -1,147 +1,204 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.minecraft.client.MinecraftClient
+ *  net.minecraft.sound.SoundCategory
+ *  net.minecraft.util.math.BlockPos
+ */
 package com.mp3player.client.audio;
 
 import com.mp3player.MP3PlayerClient;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.BlockPos;
-
-import javax.sound.sampled.*;
+import com.mp3player.client.audio.AudioConverter;
 import java.io.File;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineEvent;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.util.math.BlockPos;
 
 public class JukeboxAudioPlayer {
     private final BlockPos pos;
     private final File currentFile;
     private Clip currentClip;
     private boolean isPlaying = false;
-    private float maxDistance = 64.0f; // Максимальная дистанция звука
-    private long startTime = 0;
-    private long durationMs = 0;
+    private float maxDistance = 64.0f;
+    private long startTime = 0L;
+    private long durationMs = 0L;
     private String trackName = "Unknown";
+    private boolean isPaused = false;
+    private long pausedPositionMs = 0L;
 
     public JukeboxAudioPlayer(BlockPos pos, File file) {
         this.pos = pos;
         this.currentFile = file;
         if (file != null) {
             String n = file.getName();
-            int dot = n.lastIndexOf('.');
+            int dot = n.lastIndexOf(46);
             this.trackName = dot > 0 ? n.substring(0, dot) : n;
         }
     }
 
     public void play() {
-        if (currentFile == null || !currentFile.exists()) {
+        if (this.currentFile == null || !this.currentFile.exists()) {
             return;
         }
-
-        File fileToPlay = currentFile;
-        if (com.mp3player.client.audio.AudioConverter.isConvertible(currentFile)) {
-            File converted = AudioConverter.convertToOgg(currentFile);
+        File fileToPlay = this.currentFile;
+        if (AudioConverter.isConvertible(this.currentFile)) {
+            File converted = AudioConverter.convertToOgg(this.currentFile);
             if (converted != null && converted.exists()) {
                 fileToPlay = converted;
             } else {
                 return;
             }
         }
-
         try {
             AudioInputStream audioStream = AudioSystem.getAudioInputStream(fileToPlay);
             AudioFormat baseFormat = audioStream.getFormat();
-
-            AudioFormat targetFormat = new AudioFormat(
-                    AudioFormat.Encoding.PCM_SIGNED,
-                    baseFormat.getSampleRate(),
-                    16,
-                    baseFormat.getChannels(),
-                    baseFormat.getChannels() * 2,
-                    baseFormat.getSampleRate(),
-                    false
-            );
-
-            AudioInputStream decodedStream;
-            if (AudioSystem.isConversionSupported(targetFormat, baseFormat)) {
-                decodedStream = AudioSystem.getAudioInputStream(targetFormat, audioStream);
-            } else {
-                decodedStream = audioStream;
+            AudioFormat targetFormat = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, baseFormat.getSampleRate(), 16, baseFormat.getChannels(), baseFormat.getChannels() * 2, baseFormat.getSampleRate(), false);
+            AudioInputStream decodedStream = AudioSystem.isConversionSupported(targetFormat, baseFormat) ? AudioSystem.getAudioInputStream(targetFormat, audioStream) : audioStream;
+            this.currentClip = AudioSystem.getClip();
+            this.currentClip.open(decodedStream);
+            this.durationMs = this.currentClip.getMicrosecondLength() / 1000L;
+            try {
+                decodedStream.close();
             }
-
-            currentClip = AudioSystem.getClip();
-            currentClip.open(decodedStream);
-            this.durationMs = currentClip.getMicrosecondLength() / 1000;
-            
-            try { decodedStream.close(); } catch(Exception e) {}
-            try { audioStream.close(); } catch(Exception e) {}
-            
-            updateVolume();
-            currentClip.start();
-            isPlaying = true;
-            startTime = System.currentTimeMillis();
-
-            currentClip.addLineListener(e -> {
+            catch (Exception exception) {
+                // empty catch block
+            }
+            try {
+                audioStream.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            this.updateVolume();
+            this.currentClip.start();
+            this.isPlaying = true;
+            this.startTime = System.currentTimeMillis();
+            this.currentClip.addLineListener(e -> {
                 if (e.getType() == LineEvent.Type.STOP) {
-                    stop();
+                    this.stop();
                 }
             });
-        } catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Jukebox play error: {}", e.getMessage());
+        }
+        catch (Exception e2) {
+            MP3PlayerClient.LOGGER.error("Jukebox play error: {}", (Object)e2.getMessage());
         }
     }
 
     public void updateVolume() {
-        if (currentClip != null && isPlaying) {
+        if (this.currentClip != null && (this.isPlaying || this.isPaused)) {
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.player == null) {
-                setVolume(0);
+                this.setVolume(0.0f);
                 return;
             }
-
-            double distance = Math.sqrt(client.player.squaredDistanceTo(pos.toCenterPos()));
-            
-            float masterVol = client.options.getSoundVolume(net.minecraft.sound.SoundCategory.MASTER);
-            
-            if (masterVol == 0 || distance > maxDistance) {
-                setVolume(0);
+            double distance = Math.sqrt(client.player.squaredDistanceTo(this.pos.toCenterPos()));
+            float masterVol = client.options.getSoundVolume(SoundCategory.MASTER);
+            if (masterVol == 0.0f || distance > (double)this.maxDistance) {
+                this.setVolume(0.0f);
             } else {
-                float vol = (float) (1.0 - (distance / maxDistance)) * masterVol;
-                setVolume(vol);
+                float vol = (float)(1.0 - distance / (double)this.maxDistance) * masterVol;
+                this.setVolume(vol);
             }
         }
     }
 
     private void setVolume(float vol) {
-        if (currentClip != null) {
+        if (this.currentClip != null) {
             try {
-                FloatControl gc = (FloatControl) currentClip.getControl(FloatControl.Type.MASTER_GAIN);
-                float dB = (float) (Math.log10(Math.max(0.0001, vol)) * 20);
+                FloatControl gc = (FloatControl)this.currentClip.getControl(FloatControl.Type.MASTER_GAIN);
+                float dB = (float)(Math.log10(Math.max(1.0E-4, (double)vol)) * 20.0);
                 gc.setValue(Math.max(gc.getMinimum(), Math.min(gc.getMaximum(), dB)));
-            } catch (Exception ignored) {}
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+        }
+    }
+
+    public void pause() {
+        if (this.currentClip != null && this.isPlaying) {
+            this.pausedPositionMs = this.currentClip.getMicrosecondPosition() / 1000L;
+            this.currentClip.stop();
+            this.isPlaying = false;
+            this.isPaused = true;
+        }
+    }
+
+    public void resume() {
+        if (this.currentClip != null && this.isPaused) {
+            this.currentClip.setMicrosecondPosition(this.pausedPositionMs * 1000L);
+            this.updateVolume();
+            this.currentClip.start();
+            this.startTime = System.currentTimeMillis() - this.pausedPositionMs;
+            this.isPlaying = true;
+            this.isPaused = false;
+        }
+    }
+
+    public void togglePlayPause() {
+        if (this.isPlaying) {
+            this.pause();
+        } else if (this.isPaused) {
+            this.resume();
+        } else {
+            this.play();
         }
     }
 
     public void stop() {
-        if (currentClip != null) {
-            isPlaying = false;
-            currentClip.stop();
-            currentClip.close();
-            currentClip = null;
+        if (this.currentClip != null) {
+            this.isPlaying = false;
+            this.isPaused = false;
+            try {
+                this.currentClip.stop();
+                this.currentClip.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            this.currentClip = null;
         }
     }
 
     public BlockPos getPos() {
-        return pos;
+        return this.pos;
     }
 
     public boolean isPlaying() {
-        return isPlaying;
+        return this.isPlaying;
+    }
+
+    public boolean isPaused() {
+        return this.isPaused;
+    }
+
+    public boolean isPlayingOrPaused() {
+        return this.isPlaying || this.isPaused;
     }
 
     public String getTrackName() {
-        return trackName;
+        return this.trackName;
     }
 
     public long getDurationMs() {
-        return durationMs;
+        return this.durationMs;
     }
 
     public long getCurrentPositionMs() {
-        return System.currentTimeMillis() - startTime;
+        if (this.isPaused) {
+            return this.pausedPositionMs;
+        }
+        if (this.isPlaying && this.startTime > 0L) {
+            return Math.max(0L, System.currentTimeMillis() - this.startTime);
+        }
+        return 0L;
     }
 }
+

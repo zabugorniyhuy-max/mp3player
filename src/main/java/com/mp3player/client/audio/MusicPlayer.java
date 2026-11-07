@@ -1,151 +1,188 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
+ *  net.minecraft.client.MinecraftClient
+ *  net.minecraft.network.packet.CustomPayload
+ */
 package com.mp3player.client.audio;
 
 import com.mp3player.MP3PlayerClient;
+import com.mp3player.client.audio.AlbumArtExtractor;
+import com.mp3player.client.audio.AudioConverter;
 import com.mp3player.client.config.ModConfig;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import javax.sound.sampled.*;
+import com.mp3player.client.gsmtc.GsmtcManager;
+import com.mp3player.network.GlobalPlayPayload;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.network.packet.CustomPayload;
 
 public class MusicPlayer {
     private static MusicPlayer instance;
     private Clip currentClip;
     private AudioInputStream currentAudioStream;
     private File currentFile;
-    private List<File> playlist = new ArrayList<>();
-    private List<File> favorites = new ArrayList<>();
+    private List<File> playlist = new ArrayList<File>();
+    private List<File> favorites = new ArrayList<File>();
     private int currentIndex = 0;
     private float volume = 0.5f;
     private float speed = 1.0f;
     private boolean isPlaying = false;
     private boolean repeat = false;
-    private long pausePosition = 0;
+    private long pausePosition = 0L;
     private File musicFolder;
+    private boolean isConverting = false;
 
     public static MusicPlayer getInstance() {
-        if (instance == null) instance = new MusicPlayer();
+        if (instance == null) {
+            instance = new MusicPlayer();
+        }
         return instance;
     }
 
     public void loadMusicFolder(File folder) {
         this.musicFolder = folder;
-        refreshPlaylist();
+        this.refreshPlaylist();
     }
 
-    private boolean isConverting = false;
-    
     public void refreshPlaylist() {
-        if (musicFolder == null) return;
-        
-        // Сначала конвертируем MP3 если есть
-        if (!isConverting) {
-            File[] mp3Files = musicFolder.listFiles((dir, name) -> com.mp3player.client.audio.AudioConverter.isConvertible(new java.io.File(dir, name)));
-            if (mp3Files != null && mp3Files.length > 0) {
-                isConverting = true;
-                MP3PlayerClient.LOGGER.info("Found {} audio files, starting conversion...", mp3Files.length);
-                AudioConverter.convertAllMp3InFolder(musicFolder, () -> {
-                    net.minecraft.client.MinecraftClient.getInstance().execute(() -> {
-                        isConverting = false;
-                        loadPlaylistFiles();
-                    });
-                });
-                return;
-            }
+        File[] mp3Files;
+        if (this.musicFolder == null) {
+            return;
         }
-        
-        loadPlaylistFiles();
+        if (!this.isConverting && (mp3Files = this.musicFolder.listFiles((dir, name) -> AudioConverter.isConvertible(new File(dir, name)))) != null && mp3Files.length > 0) {
+            this.isConverting = true;
+            MP3PlayerClient.LOGGER.info("Found {} audio files, starting conversion...", (Object)mp3Files.length);
+            AudioConverter.convertAllMp3InFolder(this.musicFolder, () -> MinecraftClient.getInstance().execute(() -> {
+                this.isConverting = false;
+                this.loadPlaylistFiles();
+            }));
+            return;
+        }
+        this.loadPlaylistFiles();
     }
-    
+
     private void loadPlaylistFiles() {
-        File playingFile = currentFile;
-        int oldSize = playlist.size();
-        playlist.clear();
-        
-        // Загружаем WAV из папки converted (конвертированные MP3)
+        File[] files;
+        File playingFile = this.currentFile;
+        int oldSize = this.playlist.size();
+        this.playlist.clear();
         File convertedFolder = AudioConverter.getConvertedFolder();
-        if (convertedFolder.exists() && convertedFolder.isDirectory()) {
-            File[] files = convertedFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".wav"));
-            if (files != null) {
-                for (File f : files) playlist.add(f);
+        if (convertedFolder.exists() && convertedFolder.isDirectory() && (files = convertedFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".wav"))) != null) {
+            for (File f : files) {
+                this.playlist.add(f);
             }
         }
-        
-        // Также загружаем WAV из основной папки mp3player
-        if (musicFolder.exists() && musicFolder.isDirectory()) {
-            File[] files = musicFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".wav"));
-            if (files != null) {
-                for (File f : files) {
-                    if (!playlist.contains(f)) playlist.add(f);
-                }
+        if (this.musicFolder.exists() && this.musicFolder.isDirectory() && (files = this.musicFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".wav"))) != null) {
+            for (File f : files) {
+                if (this.playlist.contains(f)) continue;
+                this.playlist.add(f);
             }
         }
-        
-        playlist.sort((a, b) -> a.getName().compareToIgnoreCase(b.getName()));
-        
-        // Восстановить индекс текущего трека
+        this.playlist.sort((a, b) -> a.getName().compareToIgnoreCase(b.getName()));
         if (playingFile != null) {
-            int newIndex = playlist.indexOf(playingFile);
-            if (newIndex >= 0) currentIndex = newIndex;
-            else if (currentIndex >= playlist.size()) currentIndex = 0;
-        }
-        
-        favorites.clear();
-        for (File f : playlist) {
-            if (ModConfig.getInstance().favorites.contains(f.getName())) {
-                favorites.add(f);
+            int newIndex = this.playlist.indexOf(playingFile);
+            if (newIndex >= 0) {
+                this.currentIndex = newIndex;
+            } else if (this.currentIndex >= this.playlist.size()) {
+                this.currentIndex = 0;
             }
         }
-        
-        if (playlist.size() != oldSize) {
-            MP3PlayerClient.LOGGER.info("Playlist updated: {} tracks", playlist.size());
+        this.favorites.clear();
+        for (File f : this.playlist) {
+            if (!ModConfig.getInstance().favorites.contains(f.getName())) continue;
+            this.favorites.add(f);
+        }
+        if (this.playlist.size() != oldSize) {
+            MP3PlayerClient.LOGGER.info("Playlist updated: {} tracks", (Object)this.playlist.size());
         }
     }
-    
+
     public boolean isConverting() {
-        return isConverting;
+        return this.isConverting;
     }
 
     public void play() {
-        if (playlist.isEmpty()) {
+        if (this.playlist.isEmpty()) {
             MP3PlayerClient.LOGGER.warn("Playlist is empty!");
             return;
         }
-        
-        // Если есть пауза - продолжить
-        if (currentClip != null && !isPlaying && pausePosition > 0) {
-            currentClip.setMicrosecondPosition(pausePosition);
-            currentClip.start();
-            isPlaying = true;
+        try {
+            if (GsmtcManager.getInstance().isPlaying()) {
+                GsmtcManager.getInstance().pause();
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        if (this.currentClip != null && !this.isPlaying && this.pausePosition > 0L) {
+            this.currentClip.setMicrosecondPosition(this.pausePosition);
+            this.currentClip.start();
+            this.isPlaying = true;
             return;
         }
-        
-        // Иначе играть текущий трек
-        playTrack(currentIndex);
+        this.playTrack(this.currentIndex);
     }
-    
+
     public void broadcastState() {
-        if (!ModConfig.getInstance().speakerMode) return;
-        // Проверяем что мы подключены к серверу
-        net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
-        if (mc.getNetworkHandler() == null || mc.player == null) return;
-        
+        if (!ModConfig.getInstance().speakerMode) {
+            return;
+        }
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.getNetworkHandler() == null || mc.player == null) {
+            return;
+        }
         String track = "";
-        long pos = 0;
-        if (isPlaying && currentClip != null) {
-            track = getCurrentTrackName();
-            pos = currentClip.getMicrosecondPosition() / 1000;
+        long pos = 0L;
+        float vol = this.volume;
+        if (this.isPlaying && this.currentClip != null) {
+            track = this.getCurrentTrackName();
+            pos = this.currentClip.getMicrosecondPosition() / 1000L;
+            vol = this.volume;
+        } else if (GsmtcManager.getInstance().isPlaying()) {
+            GsmtcManager g = GsmtcManager.getInstance();
+            String t = g.getTitle();
+            String a = g.getArtist();
+            track = a != null && !a.isEmpty() ? a + " - " + t : t;
+            pos = (long)(g.getPosition() * 1000.0);
+            vol = g.getVolume();
         }
         try {
-            ClientPlayNetworking.send(new com.mp3player.network.GlobalPlayPayload(track, pos, ModConfig.getInstance().speakerRange, this.volume));
-        } catch (Exception e) {
-            // Игнорируем ошибку если не подключены
+            ClientPlayNetworking.send((CustomPayload)new GlobalPlayPayload(track, pos, ModConfig.getInstance().speakerRange, vol));
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+    }
+
+    public void broadcastStop() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.getNetworkHandler() == null || mc.player == null) {
+            return;
+        }
+        try {
+            ClientPlayNetworking.send((CustomPayload)new GlobalPlayPayload("", 0L, 0, 0.0f));
+        }
+        catch (Exception exception) {
+            // empty catch block
         }
     }
 
     public void playTrack(int index) {
-        if (playlist.isEmpty()) {
+        if (this.playlist.isEmpty()) {
             MP3PlayerClient.LOGGER.warn("Cannot play: playlist is empty");
             return;
         }
@@ -153,173 +190,186 @@ public class MusicPlayer {
             MP3PlayerClient.LOGGER.warn("Cannot play: global mute is enabled");
             return;
         }
-        if (index < 0 || index >= playlist.size()) {
-            MP3PlayerClient.LOGGER.warn("Invalid track index: {}", index);
+        if (index < 0 || index >= this.playlist.size()) {
+            MP3PlayerClient.LOGGER.warn("Invalid track index: {}", (Object)index);
             return;
         }
-        
-        stop();
-        currentIndex = index;
-        currentFile = playlist.get(index);
-        
-        MP3PlayerClient.LOGGER.info("Playing: {}", currentFile.getName());
-        
         try {
-            AudioInputStream audioStream = AudioSystem.getAudioInputStream(currentFile);
-            AudioFormat baseFormat = audioStream.getFormat();
-            
-            // Конвертируем в PCM если нужно
-            AudioFormat targetFormat = new AudioFormat(
-                AudioFormat.Encoding.PCM_SIGNED,
-                baseFormat.getSampleRate(),
-                16,
-                baseFormat.getChannels(),
-                baseFormat.getChannels() * 2,
-                baseFormat.getSampleRate(),
-                false
-            );
-            
-            AudioInputStream decodedStream;
-            if (AudioSystem.isConversionSupported(targetFormat, baseFormat)) {
-                decodedStream = AudioSystem.getAudioInputStream(targetFormat, audioStream);
-            } else {
-                decodedStream = audioStream;
+            if (GsmtcManager.getInstance().isPlaying()) {
+                GsmtcManager.getInstance().pause();
             }
-            
-            currentClip = AudioSystem.getClip();
-            currentAudioStream = decodedStream;
-            currentClip.open(decodedStream);
-            
-            // Release the file lock immediately because Clip loads it entirely into RAM
-            try { decodedStream.close(); } catch(Exception e) {}
-            try { audioStream.close(); } catch(Exception e) {}
-            currentAudioStream = null;
-            
-            currentClip.start();
-            setVolume(volume);
-            isPlaying = true;
-            pausePosition = 0;
-            
-            currentClip.addLineListener(e -> {
-                if (e.getType() == LineEvent.Type.STOP && isPlaying) {
-                    if (currentClip != null && currentClip.getMicrosecondPosition() >= currentClip.getMicrosecondLength() - 1000) {
-                        if (repeat) {
-                            playTrack(currentIndex);
-                        } else {
-                            next();
-                        }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        this.stop();
+        this.currentIndex = index;
+        this.currentFile = this.playlist.get(index);
+        MP3PlayerClient.LOGGER.info("Playing: {}", (Object)this.currentFile.getName());
+        try {
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(this.currentFile);
+            AudioFormat baseFormat = audioStream.getFormat();
+            AudioFormat targetFormat = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, baseFormat.getSampleRate(), 16, baseFormat.getChannels(), baseFormat.getChannels() * 2, baseFormat.getSampleRate(), false);
+            AudioInputStream decodedStream = AudioSystem.isConversionSupported(targetFormat, baseFormat) ? AudioSystem.getAudioInputStream(targetFormat, audioStream) : audioStream;
+            this.currentClip = AudioSystem.getClip();
+            this.currentAudioStream = decodedStream;
+            this.currentClip.open(decodedStream);
+            try {
+                decodedStream.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            try {
+                audioStream.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            this.currentAudioStream = null;
+            this.currentClip.start();
+            this.setVolume(this.volume);
+            this.isPlaying = true;
+            this.pausePosition = 0L;
+            this.currentClip.addLineListener(e -> {
+                if (e.getType() == LineEvent.Type.STOP && this.isPlaying && this.currentClip != null && this.currentClip.getMicrosecondPosition() >= this.currentClip.getMicrosecondLength() - 1000L) {
+                    if (this.repeat) {
+                        this.playTrack(this.currentIndex);
+                    } else {
+                        this.next();
                     }
                 }
             });
-            
-            MP3PlayerClient.LOGGER.info("Started playing: {}", currentFile.getName());
-            broadcastState();
-            
-        } catch (UnsupportedAudioFileException e) {
-            MP3PlayerClient.LOGGER.error("Unsupported format: {} - {}", currentFile.getName(), e.getMessage());
-        } catch (IOException e) {
-            MP3PlayerClient.LOGGER.error("IO error: {}", e.getMessage());
-        } catch (LineUnavailableException e) {
-            MP3PlayerClient.LOGGER.error("Audio line unavailable: {}", e.getMessage());
-        } catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Error playing {}: {}", currentFile.getName(), e.getMessage());
+            MP3PlayerClient.LOGGER.info("Started playing: {}", (Object)this.currentFile.getName());
+            AlbumArtExtractor.loadCoverForFile(this.currentFile, this.getCurrentTrackName(), "");
+            this.broadcastState();
+        }
+        catch (UnsupportedAudioFileException e2) {
+            MP3PlayerClient.LOGGER.error("Unsupported format: {} - {}", (Object)this.currentFile.getName(), (Object)e2.getMessage());
+        }
+        catch (IOException e3) {
+            MP3PlayerClient.LOGGER.error("IO error: {}", (Object)e3.getMessage());
+        }
+        catch (LineUnavailableException e4) {
+            MP3PlayerClient.LOGGER.error("Audio line unavailable: {}", (Object)e4.getMessage());
+        }
+        catch (Exception e5) {
+            MP3PlayerClient.LOGGER.error("Error playing {}: {}", (Object)this.currentFile.getName(), (Object)e5.getMessage());
         }
     }
 
     public void pause() {
-        if (currentClip != null && isPlaying) {
-            pausePosition = currentClip.getMicrosecondPosition();
-            currentClip.stop();
-            isPlaying = false;
-            broadcastState();
+        if (this.currentClip != null && this.isPlaying) {
+            this.pausePosition = this.currentClip.getMicrosecondPosition();
+            this.currentClip.stop();
+            this.isPlaying = false;
+            this.broadcastState();
         }
     }
 
     public void stop() {
-        if (currentClip != null) {
-            isPlaying = false;
-            currentClip.stop();
-            currentClip.close();
-            currentClip = null;
-            pausePosition = 0;
+        if (this.currentClip != null) {
+            this.isPlaying = false;
+            this.currentClip.stop();
+            this.currentClip.close();
+            this.currentClip = null;
+            this.pausePosition = 0L;
         }
-        if (currentAudioStream != null) {
-            try { currentAudioStream.close(); } catch(Exception e) {}
-            currentAudioStream = null;
+        if (this.currentAudioStream != null) {
+            try {
+                this.currentAudioStream.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            this.currentAudioStream = null;
         }
     }
 
     public void next() {
-        if (!playlist.isEmpty()) {
-            currentIndex = (currentIndex + 1) % playlist.size();
-            playTrack(currentIndex);
+        if (!this.playlist.isEmpty()) {
+            this.currentIndex = (this.currentIndex + 1) % this.playlist.size();
+            this.playTrack(this.currentIndex);
         }
     }
 
     public void previous() {
-        if (!playlist.isEmpty()) {
-            currentIndex = (currentIndex - 1 + playlist.size()) % playlist.size();
-            playTrack(currentIndex);
+        if (!this.playlist.isEmpty()) {
+            this.currentIndex = (this.currentIndex - 1 + this.playlist.size()) % this.playlist.size();
+            this.playTrack(this.currentIndex);
         }
     }
 
     public void setVolume(float vol) {
-        this.volume = Math.max(0, Math.min(1, vol));
-        applyVolume();
-        broadcastState(); // Force sync when volume changes
+        this.volume = Math.max(0.0f, Math.min(1.0f, vol));
+        this.applyVolume();
+        this.broadcastState();
     }
-    
+
     public void applyVolume() {
-        if (currentClip != null) {
+        if (this.currentClip != null) {
             try {
-                float masterVolume = net.minecraft.client.MinecraftClient.getInstance().options.getSoundVolume(net.minecraft.sound.SoundCategory.MASTER);
-                float finalVolume = this.volume * masterVolume;
-                
-                FloatControl gc = (FloatControl) currentClip.getControl(FloatControl.Type.MASTER_GAIN);
-                float dB = (float) (Math.log10(Math.max(0.0001, finalVolume)) * 20);
+                FloatControl gc = (FloatControl)this.currentClip.getControl(FloatControl.Type.MASTER_GAIN);
+                if (this.volume <= 1.0E-4f || ModConfig.getInstance().muteGlobal) {
+                    gc.setValue(gc.getMinimum());
+                    return;
+                }
+                float minDb = Math.max(gc.getMinimum(), -40.0f);
+                float maxDb = Math.min(gc.getMaximum(), 3.0f);
+                float dB = this.volume >= 0.99f ? maxDb : minDb + (float)(Math.pow(this.volume, 0.5) * (double)(maxDb - minDb));
                 gc.setValue(Math.max(gc.getMinimum(), Math.min(gc.getMaximum(), dB)));
-            } catch (Exception ignored) {}
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
         }
     }
 
     public void seekRelative(long deltaMicros) {
-        if (currentClip != null) {
-            long newPos = Math.max(0, Math.min(currentClip.getMicrosecondLength(), 
-                currentClip.getMicrosecondPosition() + deltaMicros));
-            currentClip.setMicrosecondPosition(newPos);
-            if (!isPlaying) pausePosition = newPos;
-            else broadcastState();
+        if (this.currentClip != null) {
+            long newPos = Math.max(0L, Math.min(this.currentClip.getMicrosecondLength(), this.currentClip.getMicrosecondPosition() + deltaMicros));
+            this.currentClip.setMicrosecondPosition(newPos);
+            if (!this.isPlaying) {
+                this.pausePosition = newPos;
+            } else {
+                this.broadcastState();
+            }
         }
     }
 
     public void seekTo(long micros) {
-        if (currentClip != null) {
-            long newPos = Math.max(0, Math.min(currentClip.getMicrosecondLength(), micros));
-            currentClip.setMicrosecondPosition(newPos);
-            if (!isPlaying) pausePosition = newPos;
+        if (this.currentClip != null) {
+            long newPos = Math.max(0L, Math.min(this.currentClip.getMicrosecondLength(), micros));
+            this.currentClip.setMicrosecondPosition(newPos);
+            if (!this.isPlaying) {
+                this.pausePosition = newPos;
+            }
         }
     }
 
-    public void setSpeed(float s) { this.speed = Math.max(0.5f, Math.min(2.0f, s)); }
-    
-    /**
-     * Воспроизводит отдельный файл (не из плейлиста)
-     * Если это MP3 - сначала конвертирует через FFmpeg
-     */
+    public void setSpeed(float s) {
+        this.speed = Math.max(0.5f, Math.min(2.0f, s));
+    }
+
     public void playFile(File file) {
         if (file == null || !file.exists()) {
-            MP3PlayerClient.LOGGER.warn("File not found: {}", file);
+            MP3PlayerClient.LOGGER.warn("File not found: {}", (Object)file);
             return;
         }
         if (ModConfig.getInstance().muteGlobal) {
             MP3PlayerClient.LOGGER.warn("Cannot play file: global mute is enabled");
             return;
         }
-        
+        try {
+            if (GsmtcManager.getInstance().isPlaying()) {
+                GsmtcManager.getInstance().pause();
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
         File fileToPlay = file;
-        
-        // Если MP3 - конвертируем в OGG
-        if (com.mp3player.client.audio.AudioConverter.isConvertible(file)) {
+        if (AudioConverter.isConvertible(file)) {
             File converted = AudioConverter.convertToOgg(file);
             if (converted != null && converted.exists()) {
                 fileToPlay = converted;
@@ -328,88 +378,111 @@ public class MusicPlayer {
                 return;
             }
         }
-        
-        stop();
-        
+        this.stop();
         try {
             AudioInputStream audioStream = AudioSystem.getAudioInputStream(fileToPlay);
             AudioFormat baseFormat = audioStream.getFormat();
-            
-            AudioFormat targetFormat = new AudioFormat(
-                AudioFormat.Encoding.PCM_SIGNED,
-                baseFormat.getSampleRate(),
-                16,
-                baseFormat.getChannels(),
-                baseFormat.getChannels() * 2,
-                baseFormat.getSampleRate(),
-                false
-            );
-            
-            AudioInputStream decodedStream;
-            if (AudioSystem.isConversionSupported(targetFormat, baseFormat)) {
-                decodedStream = AudioSystem.getAudioInputStream(targetFormat, audioStream);
-            } else {
-                decodedStream = audioStream;
+            AudioFormat targetFormat = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, baseFormat.getSampleRate(), 16, baseFormat.getChannels(), baseFormat.getChannels() * 2, baseFormat.getSampleRate(), false);
+            AudioInputStream decodedStream = AudioSystem.isConversionSupported(targetFormat, baseFormat) ? AudioSystem.getAudioInputStream(targetFormat, audioStream) : audioStream;
+            this.currentClip = AudioSystem.getClip();
+            this.currentAudioStream = decodedStream;
+            this.currentClip.open(decodedStream);
+            try {
+                decodedStream.close();
             }
-            
-            currentClip = AudioSystem.getClip();
-            currentAudioStream = decodedStream;
-            currentClip.open(decodedStream);
-            
-            // Release the file lock immediately because Clip loads it entirely into RAM
-            try { decodedStream.close(); } catch(Exception e) {}
-            try { audioStream.close(); } catch(Exception e) {}
-            currentAudioStream = null;
-            
-            currentClip.start();
-            setVolume(volume);
-            isPlaying = true;
-            currentFile = file;
-            pausePosition = 0;
-            
-            MP3PlayerClient.LOGGER.info("Playing file: {}", file.getName());
-            
-        } catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Error playing file {}: {}", file.getName(), e.getMessage());
+            catch (Exception exception) {
+                // empty catch block
+            }
+            try {
+                audioStream.close();
+            }
+            catch (Exception exception) {
+                // empty catch block
+            }
+            this.currentAudioStream = null;
+            this.currentClip.start();
+            this.setVolume(this.volume);
+            this.isPlaying = true;
+            this.currentFile = file;
+            this.pausePosition = 0L;
+            AlbumArtExtractor.loadCoverForFile(file, this.getCurrentTrackName(), "");
+            MP3PlayerClient.LOGGER.info("Playing file: {}", (Object)file.getName());
+        }
+        catch (Exception e) {
+            MP3PlayerClient.LOGGER.error("Error playing file {}: {}", (Object)file.getName(), (Object)e.getMessage());
         }
     }
-    
-    public void toggleFavorite() { 
-        if (currentFile != null) { 
-            if (favorites.contains(currentFile)) {
-                favorites.remove(currentFile);
-                ModConfig.getInstance().favorites.remove(currentFile.getName());
+
+    public void toggleFavorite() {
+        if (this.currentFile != null) {
+            if (this.favorites.contains(this.currentFile)) {
+                this.favorites.remove(this.currentFile);
+                ModConfig.getInstance().favorites.remove(this.currentFile.getName());
             } else {
-                favorites.add(currentFile);
-                if (!ModConfig.getInstance().favorites.contains(currentFile.getName())) {
-                    ModConfig.getInstance().favorites.add(currentFile.getName());
+                this.favorites.add(this.currentFile);
+                if (!ModConfig.getInstance().favorites.contains(this.currentFile.getName())) {
+                    ModConfig.getInstance().favorites.add(this.currentFile.getName());
                 }
             }
             ModConfig.getInstance().save();
-        } 
+        }
     }
-    
+
     public void toggleRepeat() {
         this.repeat = !this.repeat;
         MP3PlayerClient.LOGGER.info("Repeat is now " + (this.repeat ? "ON" : "OFF"));
     }
-    
-    public boolean isRepeat() { return repeat; }
-    public boolean isFavorite() { return currentFile != null && favorites.contains(currentFile); }
-    public List<File> getPlaylist() { return playlist; }
-    public List<File> getFavorites() { return favorites; }
-    public int getCurrentIndex() { return currentIndex; }
-    public float getVolume() { return volume; }
-    public float getSpeed() { return speed; }
-    public boolean isPlaying() { return isPlaying; }
-    public long getCurrentPosition() { return currentClip != null ? currentClip.getMicrosecondPosition() : 0; }
-    public long getDuration() { return currentClip != null ? currentClip.getMicrosecondLength() : 0; }
+
+    public boolean isRepeat() {
+        return this.repeat;
+    }
+
+    public boolean isFavorite() {
+        return this.currentFile != null && this.favorites.contains(this.currentFile);
+    }
+
+    public List<File> getPlaylist() {
+        return this.playlist;
+    }
+
+    public List<File> getFavorites() {
+        return this.favorites;
+    }
+
+    public int getCurrentIndex() {
+        return this.currentIndex;
+    }
+
+    public float getVolume() {
+        return this.volume;
+    }
+
+    public float getSpeed() {
+        return this.speed;
+    }
+
+    public boolean isPlaying() {
+        return this.isPlaying;
+    }
+
+    public long getCurrentPosition() {
+        if (!this.isPlaying && this.pausePosition > 0L) {
+            return this.pausePosition;
+        }
+        return this.currentClip != null ? this.currentClip.getMicrosecondPosition() : 0L;
+    }
+
+    public long getDuration() {
+        return this.currentClip != null ? this.currentClip.getMicrosecondLength() : 0L;
+    }
+
     public String getCurrentTrackName() {
-        if (currentFile != null) { 
-            String n = currentFile.getName(); 
-            int d = n.lastIndexOf('.'); 
-            return d > 0 ? n.substring(0, d) : n; 
+        if (this.currentFile != null) {
+            String n = this.currentFile.getName();
+            int d = n.lastIndexOf(46);
+            return d > 0 ? n.substring(0, d) : n;
         }
         return "No track";
     }
 }
+

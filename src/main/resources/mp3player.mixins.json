@@ -3,12 +3,10 @@
   "package": "com.mp3player.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "JukeboxManagerMixin"
+    "JukeboxManagerMixin",
+    "JukeboxBlockEntityMixin"
   ],
-  "client": [
-    "PlayerEntityRendererMixin",
-    "JukeboxManagerMixin"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 1
   }

@@ -1,84 +1,77 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+ *  net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
+ *  net.minecraft.client.gui.screen.Screen
+ *  net.minecraft.client.option.KeyBinding
+ *  net.minecraft.client.util.InputUtil$Type
+ */
 package com.mp3player.client;
 
+import com.mp3player.client.audio.MusicPlayer;
+import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.MainScreen;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import org.lwjgl.glfw.GLFW;
 
 public class KeyInputHandler {
-    public static final String KEY_CATEGORY_MP3PLAYER = "MP3 Player";
-    public static final String KEY_OPEN_MENU = "Open Menu";
-
+    public static final KeyBinding.Category KEY_CATEGORY_MP3PLAYER = KeyBinding.Category.create(net.minecraft.util.Identifier.of("mp3player", "main"));
     public static KeyBinding openMenuKeyBinding;
-    private static boolean wasFallbackKeyPressed = false;
+    public static KeyBinding playPauseKeyBinding;
+    public static KeyBinding nextTrackKeyBinding;
+    public static KeyBinding prevTrackKeyBinding;
 
     public static void register() {
-        KeyBinding binding = null;
-        try {
-            Object keySym = InputUtil.Type.KEYSYM;
-            int keyCode = GLFW.GLFW_KEY_RIGHT_SHIFT;
-            Object inputKey = InputUtil.Type.KEYSYM.createFromCode(keyCode);
-            
-            Object[][] allPossibleArgs = new Object[][] {
-                new Object[] { KEY_OPEN_MENU, keySym, keyCode, KEY_CATEGORY_MP3PLAYER },
-                new Object[] { KEY_OPEN_MENU, keyCode, KEY_CATEGORY_MP3PLAYER },
-                new Object[] { KEY_OPEN_MENU, inputKey, KEY_CATEGORY_MP3PLAYER }
-            };
-
-            for (java.lang.reflect.Constructor<?> ctor : KeyBinding.class.getDeclaredConstructors()) {
-                ctor.setAccessible(true);
-                for (Object[] args : allPossibleArgs) {
-                    if (ctor.getParameterCount() == args.length) {
-                        try {
-                            binding = (KeyBinding) ctor.newInstance(args);
-                            if (binding != null) break;
-                        } catch (Throwable t) {
-                            // Игнорируем несовпадение типов аргументов
-                        }
-                    }
-                }
-                if (binding != null) break;
-            }
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
-
-        if (binding != null) {
-            openMenuKeyBinding = KeyBindingHelper.registerKeyBinding(binding);
-        } else {
-            System.err.println("[MP3Player] CRITICAL: Failed to create KeyBinding via reflection! Falling back to raw GLFW key polling (Right Shift).");
-        }
-
+        openMenuKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.mp3player.open_menu", InputUtil.Type.KEYSYM, 344, KEY_CATEGORY_MP3PLAYER));
+        playPauseKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.mp3player.play_pause", InputUtil.Type.KEYSYM, 80, KEY_CATEGORY_MP3PLAYER));
+        nextTrackKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.mp3player.next_track", InputUtil.Type.KEYSYM, 93, KEY_CATEGORY_MP3PLAYER));
+        prevTrackKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.mp3player.prev_track", InputUtil.Type.KEYSYM, 91, KEY_CATEGORY_MP3PLAYER));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            boolean isPressed = false;
-
-            if (openMenuKeyBinding != null) {
+            if (openMenuKeyBinding != null && client.currentScreen == null) {
                 while (openMenuKeyBinding.wasPressed()) {
-                    isPressed = true;
-                }
-            } else {
-                if (client.currentScreen == null && client.getWindow() != null) {
-                    long window = client.getWindow().getHandle();
-                    boolean mPressed = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-                    
-                    if (mPressed && !wasFallbackKeyPressed) {
-                        isPressed = true;
-                        wasFallbackKeyPressed = true;
-                    } else if (!mPressed) {
-                        wasFallbackKeyPressed = false;
-                    }
+                    client.setScreen(new MainScreen());
+                    break;
                 }
             }
-
-            if (isPressed) {
-                if (client.currentScreen instanceof MainScreen screen) {
-                    screen.startClosing();
-                } else if (client.currentScreen == null) {
-                    client.setScreen(new MainScreen());
+            GsmtcManager gsmtc = GsmtcManager.getInstance();
+            MusicPlayer local = MusicPlayer.getInstance();
+            if (playPauseKeyBinding != null) {
+                while (playPauseKeyBinding.wasPressed()) {
+                    if (gsmtc.hasTrack()) {
+                        gsmtc.togglePlayPause();
+                        continue;
+                    }
+                    if (local.isPlaying()) {
+                        local.pause();
+                        continue;
+                    }
+                    local.play();
+                }
+            }
+            if (nextTrackKeyBinding != null) {
+                while (nextTrackKeyBinding.wasPressed()) {
+                    if (gsmtc.hasTrack()) {
+                        gsmtc.next();
+                        continue;
+                    }
+                    local.next();
+                }
+            }
+            if (prevTrackKeyBinding != null) {
+                while (prevTrackKeyBinding.wasPressed()) {
+                    if (gsmtc.hasTrack()) {
+                        gsmtc.previous();
+                        continue;
+                    }
+                    local.previous();
                 }
             }
         });
     }
 }
+

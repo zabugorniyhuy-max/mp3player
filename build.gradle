@@ -1,9 +1,9 @@
 plugins {
-    id 'fabric-loom' version '1.9-SNAPSHOT'
+    id 'fabric-loom' version '1.13.6'
     id 'maven-publish'
 }
 
-version = '1.0.0'
+version = '1.21.11'
 group = 'com.mp3player'
 
 repositories {
@@ -17,11 +17,23 @@ repositories {
     }
 }
 
+configurations {
+    bundleLib
+    implementation.extendsFrom(bundleLib)
+}
+
 dependencies {
-    minecraft "com.mojang:minecraft:1.21.1"
-    mappings "net.fabricmc:yarn:1.21.1+build.3:v2"
-    modImplementation "net.fabricmc:fabric-loader:0.16.5"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:0.106.0+1.21.1"
+    minecraft "com.mojang:minecraft:1.21.11"
+    mappings "net.fabricmc:yarn:1.21.11+build.6:v2"
+    modImplementation "net.fabricmc:fabric-loader:0.16.10"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.6+1.21.11"
+
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-windows"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-windows-arm64"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-linux"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-macos"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-macos-arm64"
 }
 
 processResources {
@@ -33,6 +45,7 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+    it.options.encoding = "UTF-8"
 }
 
 java {
@@ -41,5 +54,14 @@ java {
     }
 }
 
+jar {
+    from {
+        configurations.bundleLib.collect { it.isDirectory() ? it : zipTree(it) }
+    } {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+}
 
-
+tasks.withType(Jar).configureEach {
+    destinationDirectory = file("../libs/1.21.11")
+}

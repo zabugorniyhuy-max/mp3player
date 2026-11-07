@@ -1,3 +1,6 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
 package com.mp3player.client.api.model;
 
 public class Playlist {
@@ -5,7 +8,7 @@ public class Playlist {
     public final String ownerUid;
     public final String title;
     public final int trackCount;
-    
+
     public Playlist(String kind, String ownerUid, String title, int trackCount) {
         this.kind = kind;
         this.ownerUid = ownerUid;
@@ -13,3 +16,4 @@ public class Playlist {
         this.trackCount = trackCount;
     }
 }
+
