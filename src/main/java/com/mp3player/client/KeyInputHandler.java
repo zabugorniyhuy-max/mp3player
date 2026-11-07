@@ -26,15 +26,21 @@ public class KeyInputHandler {
     public static KeyMapping prevTrackKeyBinding;
 
     public static void register() {
-        openMenuKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.open_menu", InputConstants.Type.KEYBOARD, 344, KEY_CATEGORY_MP3PLAYER));
-        playPauseKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.play_pause", InputConstants.Type.KEYBOARD, 80, KEY_CATEGORY_MP3PLAYER));
-        nextTrackKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.next_track", InputConstants.Type.KEYBOARD, 93, KEY_CATEGORY_MP3PLAYER));
-        prevTrackKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.prev_track", InputConstants.Type.KEYBOARD, 91, KEY_CATEGORY_MP3PLAYER));
+        openMenuKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.open_menu", InputConstants.Type.KEYBOARD, InputConstants.KEY_RSHIFT, KEY_CATEGORY_MP3PLAYER));
+        playPauseKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.play_pause", InputConstants.Type.KEYBOARD, InputConstants.KEY_P, KEY_CATEGORY_MP3PLAYER));
+        nextTrackKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.next_track", InputConstants.Type.KEYBOARD, InputConstants.KEY_RBRACKET, KEY_CATEGORY_MP3PLAYER));
+        prevTrackKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.mp3player.prev_track", InputConstants.Type.KEYBOARD, InputConstants.KEY_LBRACKET, KEY_CATEGORY_MP3PLAYER));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (openMenuKeyBinding != null && client.gui.screen() == null) {
-                while (openMenuKeyBinding.consumeClick()) {
+            if (client.gui.screen() == null) {
+                boolean open = false;
+                if (openMenuKeyBinding != null) {
+                    while (openMenuKeyBinding.consumeClick()) {
+                        open = true;
+                    }
+                }
+                if (open) {
                     client.gui.setScreen(new MainScreen());
-                    break;
+                    return;
                 }
             }
             GsmtcManager gsmtc = GsmtcManager.getInstance();

@@ -29,12 +29,12 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:0.19.5"
     implementation "net.fabricmc.fabric-api:fabric-api:0.165.0+26.3"
 
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3"
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-windows"
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-windows-arm64"
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-linux"
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-macos"
-    bundleLib "org.lwjgl:lwjgl-nanovg:3.3.3:natives-macos-arm64"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3:natives-windows"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3:natives-windows-arm64"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3:natives-linux"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3:natives-macos"
+    bundleLib "org.lwjgl:lwjgl-nanovg:3.4.3:natives-macos-arm64"
 }
 
 processResources {

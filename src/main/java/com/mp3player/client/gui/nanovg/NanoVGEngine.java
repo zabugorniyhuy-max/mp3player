@@ -550,7 +550,7 @@ public class NanoVGEngine {
         float r = (float)(color >> 16 & 0xFF) / 255.0f;
         float g = (float)(color >> 8 & 0xFF) / 255.0f;
         float b = (float)(color & 0xFF) / 255.0f;
-        return out.r(r).g(g).b(b).a(a);
+        return NanoVG.nvgRGBAf(r, g, b, a, out);
     }
 
     public void drawRoundedRect(float x, float y, float w, float h, float radius, int color) {
