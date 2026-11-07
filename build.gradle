@@ -18,7 +18,9 @@ repositories {
 }
 
 configurations {
-    bundleLib
+    bundleLib {
+        transitive = false
+    }
     implementation.extendsFrom(bundleLib)
 }
 
@@ -61,6 +63,10 @@ jar {
         exclude "META-INF/*.SF"
         exclude "META-INF/*.DSA"
         exclude "META-INF/*.RSA"
+        exclude "META-INF/INDEX.LIST"
+        exclude "org/lwjgl/system/**"
+        exclude "org/lwjgl/PointerBuffer*"
+        exclude "org/lwjgl/CLongBuffer*"
     }
 }
 
