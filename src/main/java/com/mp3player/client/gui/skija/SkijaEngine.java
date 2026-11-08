@@ -16,6 +16,7 @@ public class SkijaEngine {
     private static SkijaEngine instance;
 
     public static final Identifier SKIJA_TEXTURE_ID = Identifier.fromNamespaceAndPath("mp3player", "skija_ui");
+    public static final Identifier SKIJA_HUD_TEXTURE_ID = Identifier.fromNamespaceAndPath("mp3player", "skija_hud");
 
     public static final int ALIGN_LEFT = 17;
     public static final int ALIGN_CENTER = 18;
@@ -55,6 +56,15 @@ public class SkijaEngine {
     private NativeImage nativeImage;
     private DynamicTexture dynamicTexture;
     private Surface surface;
+    private Canvas uiCanvas;
+
+    private int hudBufferWidth = 0;
+    private int hudBufferHeight = 0;
+    private NativeImage hudNativeImage;
+    private DynamicTexture hudDynamicTexture;
+    private Surface hudSurface;
+    private Canvas hudCanvas;
+
     private Canvas canvas;
     private int scissorSaveCount = 0;
 
@@ -67,6 +77,8 @@ public class SkijaEngine {
 
     private volatile byte[] gsmtcCoverBytes;
     private volatile byte[] localCoverBytes;
+    private volatile Image gsmtcCoverImage;
+    private volatile Image localCoverImage;
 
     public static synchronized SkijaEngine getInstance() {
         if (instance == null) {
@@ -127,12 +139,19 @@ public class SkijaEngine {
         } catch (Throwable ignored) {}
 
         if (this.regularFont == null) {
-            this.regularTypeface = fontMgr.matchFamilyStyle(null, FontStyle.NORMAL);
-            this.regularFont = new Font(this.regularTypeface, 12f);
+            this.regularTypeface = fontMgr.matchFamilyStyle("Arial", FontStyle.NORMAL);
+            if (this.regularTypeface != null) {
+                this.regularFont = new Font(this.regularTypeface, 12f);
+            }
         }
         if (this.boldFont == null) {
-            this.boldTypeface = this.regularTypeface;
-            this.boldFont = new Font(this.boldTypeface, 12f);
+            this.boldTypeface = fontMgr.matchFamilyStyle("Arial", FontStyle.BOLD);
+            if (this.boldTypeface != null) {
+                this.boldFont = new Font(this.boldTypeface, 12f);
+            } else if (this.regularTypeface != null) {
+                this.boldTypeface = this.regularTypeface;
+                this.boldFont = this.regularFont;
+            }
         }
         if (this.iconFont == null) {
             this.iconFont = this.regularFont;
@@ -167,29 +186,31 @@ public class SkijaEngine {
                 this.nativeImage = new NativeImage(NativeImage.Format.RGBA, width, height, false);
                 ImageInfo info = new ImageInfo(width, height, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
                 this.surface = Surface.wrapPixels(info, this.nativeImage.getPointer(), (long) width * 4);
-                this.canvas = this.surface.getCanvas();
+                this.uiCanvas = this.surface.getCanvas();
 
                 this.dynamicTexture = new DynamicTexture(() -> "skija_ui", this.nativeImage);
                 Minecraft.getInstance().getTextureManager().register(SKIJA_TEXTURE_ID, this.dynamicTexture);
             } catch (Throwable t) {
                 MP3PlayerClient.LOGGER.error("[Skija] Error allocating surface: {}", t.getMessage());
+                this.uiCanvas = null;
                 this.canvas = null;
                 return;
             }
         }
 
+        this.canvas = this.uiCanvas;
         if (this.canvas != null) {
             this.canvas.clear(0x00000000);
         }
     }
 
     public synchronized void endFrame() {
-        if (this.surface == null || this.canvas == null || this.dynamicTexture == null) {
+        if (this.surface == null || this.uiCanvas == null || this.dynamicTexture == null) {
             return;
         }
         try {
             while (this.scissorSaveCount > 0) {
-                this.canvas.restore();
+                this.uiCanvas.restore();
                 this.scissorSaveCount--;
             }
             this.dynamicTexture.upload();
@@ -203,6 +224,62 @@ public class SkijaEngine {
             return;
         }
         ctx.blit(SKIJA_TEXTURE_ID, screenX, screenX + width, screenY, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
+    }
+
+    public synchronized void beginHudFrame(int width, int height) {
+        if (!this.available || width <= 0 || height <= 0) {
+            return;
+        }
+
+        this.scissorSaveCount = 0;
+
+        if (this.hudSurface == null || this.hudBufferWidth != width || this.hudBufferHeight != height) {
+            destroyHudSurface();
+            this.hudBufferWidth = width;
+            this.hudBufferHeight = height;
+
+            try {
+                this.hudNativeImage = new NativeImage(NativeImage.Format.RGBA, width, height, false);
+                ImageInfo info = new ImageInfo(width, height, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+                this.hudSurface = Surface.wrapPixels(info, this.hudNativeImage.getPointer(), (long) width * 4);
+                this.hudCanvas = this.hudSurface.getCanvas();
+
+                this.hudDynamicTexture = new DynamicTexture(() -> "skija_hud", this.hudNativeImage);
+                Minecraft.getInstance().getTextureManager().register(SKIJA_HUD_TEXTURE_ID, this.hudDynamicTexture);
+            } catch (Throwable t) {
+                MP3PlayerClient.LOGGER.error("[Skija] Error allocating HUD surface: {}", t.getMessage());
+                this.hudCanvas = null;
+                this.canvas = null;
+                return;
+            }
+        }
+
+        this.canvas = this.hudCanvas;
+        if (this.canvas != null) {
+            this.canvas.clear(0x00000000);
+        }
+    }
+
+    public synchronized void endHudFrame() {
+        if (this.hudSurface == null || this.hudCanvas == null || this.hudDynamicTexture == null) {
+            return;
+        }
+        try {
+            while (this.scissorSaveCount > 0) {
+                this.hudCanvas.restore();
+                this.scissorSaveCount--;
+            }
+            this.hudDynamicTexture.upload();
+        } catch (Throwable t) {
+            MP3PlayerClient.LOGGER.error("[Skija] Error ending HUD frame: {}", t.getMessage());
+        }
+    }
+
+    public void renderHudToContext(GuiGraphicsExtractor ctx, int screenX, int screenY, int width, int height) {
+        if (!this.available || this.hudDynamicTexture == null) {
+            return;
+        }
+        ctx.blit(SKIJA_HUD_TEXTURE_ID, screenX, screenX + width, screenY, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
     }
 
     public Canvas getCanvas() {
@@ -320,45 +397,58 @@ public class SkijaEngine {
         }
     }
 
-    public void drawTab(float x, float y, float w, float h, String text, boolean active, boolean hover, int accent) {
+    public void drawTab(float x, float y, float w, float h, String text, boolean isSelected, boolean isHovered, int accentColor) {
         if (this.canvas == null) return;
-        int bg = active ? (darkTheme ? 0xFF2A2A38 : 0xFFFFFFFF) : (hover ? (darkTheme ? 0xFF242430 : 0xFFE8E8EE) : 0x00000000);
-        if (bg != 0) {
-            drawRoundedRect(x, y, w, h, 6f, bg);
+        drawTabBase(x, y, w, h, isSelected, isHovered, accentColor);
+        int textCol = isSelected ? accentColor : (isHovered ? (this.darkTheme ? 0xFFFFFFFF : 0xFF0F1416) : (this.darkTheme ? 0xFF9E9EB8 : 0xFF646E7B));
+        drawText(text, x + w * 0.5f, y + h * 0.5f, 12.0f, textCol, isSelected, ALIGN_CENTER);
+    }
+
+    public void drawTabBase(float x, float y, float w, float h, boolean isSelected, boolean isHovered, int accentColor) {
+        if (this.canvas == null) return;
+        float radius = 7.0f;
+        int bg = 0;
+        if (this.darkTheme) {
+            bg = isSelected ? 0xFF28283C : (isHovered ? 0xFF202030 : 0);
+        } else {
+            bg = isSelected ? 0xFFFFFFFF : (isHovered ? 0xFFE2E6F0 : 0);
         }
-        int textCol = active ? accent : (hover ? (darkTheme ? 0xFFFFFFFF : 0xFF111111) : (darkTheme ? 0xFF9999AA : 0xFF666677));
-        drawCenteredText(text, x + w / 2f, y + h / 2f + 4f, 12f, textCol, active);
-        if (active) {
-            try (Paint line = new Paint()) {
-                line.setColor(accent);
-                line.setStrokeWidth(2.5f);
-                line.setAntiAlias(true);
-                this.canvas.drawLine(x + 8, y + h - 1.5f, x + w - 8, y + h - 1.5f, line);
+        if (bg != 0) {
+            drawRoundedRect(x, y, w, h, radius, bg);
+            if (!this.darkTheme && isSelected) {
+                drawRoundedRectOutline(x, y, w, h, radius, 1.0f, 0x33CCCCCC);
             }
         }
-    }
-
-    public void drawTabBase(float x, float y, float w, float h, boolean active, boolean hover, int accent) {
-        if (this.canvas == null) return;
-        int bg = active ? (darkTheme ? 0xFF2A2A38 : 0xFFFFFFFF) : (hover ? (darkTheme ? 0xFF242430 : 0xFFE8E8EE) : 0x00000000);
-        if (bg != 0) {
-            drawRoundedRect(x, y, w, h, 6f, bg);
+        if (isSelected) {
+            drawRoundedRect(x + 4.0f, y + h - 2.5f, w - 8.0f, 2.5f, 1.5f, accentColor);
+            drawDropShadow(x + 4.0f, y + h - 2.5f, w - 8.0f, 2.5f, 1.5f, 6.0f, 1.0f, accentColor & 0x77FFFFFF);
         }
     }
 
-    public void drawButtonBase(float x, float y, float w, float h, boolean hover, boolean pressed, int color) {
+    public void drawButtonBase(float x, float y, float w, float h, boolean isHovered, boolean isPressed, int accentColor) {
         if (this.canvas == null) return;
-        int bg = pressed ? (color & 0x66FFFFFF) : (hover ? (color & 0x33FFFFFF) : (darkTheme ? 0xFF242430 : 0xFFE0E0EE));
-        drawRoundedRect(x, y, w, h, 5f, bg);
+        float radius = Math.min(h * 0.5f, 7.0f);
+        int bg;
+        int outline;
+        if (this.darkTheme) {
+            bg = isPressed ? 0xFF14141F : (isHovered ? 0xFF2E2E42 : 0xFF20202E);
+            outline = isHovered && !isPressed ? accentColor : 0x33444466;
+        } else {
+            bg = isPressed ? 0xFFCBCBD5 : (isHovered ? 0xFFE2E6F0 : 0xFFF1F3F9);
+            outline = isHovered && !isPressed ? accentColor : 0x44CCCCCC;
+        }
+        drawRoundedRect(x, y, w, h, radius, bg);
+        drawRoundedRectOutline(x, y, w, h, radius, 1.0f, outline);
+        if (isHovered && !isPressed) {
+            drawDropShadow(x, y, w, h, radius, 6.0f, 1.0f, accentColor & 0x44FFFFFF);
+        }
     }
 
-    public void drawButton(float x, float y, float w, float h, String text, boolean hover, boolean pressed, int activeColor, int normalColor) {
+    public void drawButton(float x, float y, float w, float h, String text, boolean isHovered, boolean isPressed, int accentColor, int textColor) {
         if (this.canvas == null) return;
-        int bg = pressed ? (activeColor & 0x55FFFFFF) : (hover ? (darkTheme ? 0xFF2A2A38 : 0xFFE0E0EE) : (darkTheme ? 0xFF1C1C26 : 0xFFEDEDF5));
-        int border = hover ? activeColor : (darkTheme ? 0xFF353545 : 0xFFD0D0DD);
-        drawRoundedRectStroke(x, y, w, h, 6f, bg, border, 1f);
-        int textCol = hover ? (darkTheme ? 0xFFFFFFFF : 0xFF111111) : normalColor;
-        drawCenteredText(text, x + w / 2f, y + h / 2f + 4f, 11f, textCol, hover);
+        drawButtonBase(x, y, w, h, isHovered, isPressed, accentColor);
+        int textCol = isHovered ? (accentColor | 0xFF000000) : (this.darkTheme ? textColor : 0xFF0F1416);
+        drawText(text, x + w * 0.5f, y + h * 0.5f + 1.0f, h * 0.55f, textCol, isHovered, ALIGN_CENTER);
     }
 
     public void drawSlider(float x, float y, float w, float h, float progress, int activeColor, int trackColor, int knobColor) {
@@ -390,42 +480,51 @@ public class SkijaEngine {
         drawCircleOutline(thumbX, thumbY, thumbR, 1.2f, activeColor);
     }
 
-    public void drawProgressBar(float x, float y, float w, float h, float progress, boolean hover, int activeColor) {
-        drawSlider(x, y, w, h, progress, activeColor, darkTheme ? 0xFF242432 : 0xFFD8DDE6, hover ? 0xFFFFFFFF : activeColor);
+    public void drawProgressBar(float x, float y, float w, float h, float progress, boolean isHovered, int accentColor) {
+        if (this.canvas == null) return;
+        progress = Math.max(0.0f, Math.min(1.0f, progress));
+        float barH = isHovered ? h + 2.0f : h;
+        float curY = y - (barH - h) * 0.5f;
+        int trackBg = this.darkTheme ? 0x44FFFFFF : 0xFFCBCBD5;
+        drawRoundedRect(x, curY, w, barH, barH * 0.5f, trackBg);
+        if (progress > 0.001f) {
+            float fillW = w * progress;
+            drawRoundedRect(x, curY, fillW, barH, barH * 0.5f, accentColor);
+            if (isHovered) {
+                float knobX = x + fillW;
+                float knobY = curY + barH * 0.5f;
+                drawCircle(knobX, knobY, barH * 1.5f, 0xFFFFFFFF);
+                drawDropShadow(knobX - 4.0f, knobY - 4.0f, 8.0f, 8.0f, 4.0f, 8.0f, 2.0f, accentColor);
+            }
+        }
     }
 
     public void drawText(String text, float x, float y, float fontSize, int color, boolean bold) {
-        if (this.canvas == null || text == null || text.isEmpty()) return;
-        try (Paint paint = new Paint();
-             Font font = new Font(bold ? this.boldTypeface : this.regularTypeface, fontSize)) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            this.canvas.drawString(text, x, y, font, paint);
-        }
+        drawText(text, x, y, fontSize, color, bold, ALIGN_LEFT);
     }
 
     public void drawText(String text, float x, float y, float fontSize, int color, boolean bold, int align) {
-        if (this.canvas == null || text == null || text.isEmpty()) return;
-        if (align == ALIGN_CENTER) {
-            drawCenteredText(text, x, y, fontSize, color, bold);
-        } else if (align == ALIGN_RIGHT) {
-            float w = getTextWidth(text, fontSize, bold);
-            drawText(text, x - w, y, fontSize, color, bold);
-        } else {
-            drawText(text, x, y, fontSize, color, bold);
-        }
-    }
-
-    public void drawCenteredText(String text, float cx, float y, float fontSize, int color, boolean bold) {
         if (this.canvas == null || text == null || text.isEmpty()) return;
         try (Paint paint = new Paint();
              Font font = new Font(bold ? this.boldTypeface : this.regularTypeface, fontSize)) {
             paint.setColor(color);
             paint.setAntiAlias(true);
             Rect bounds = font.measureText(text, paint);
-            float x = cx - bounds.getWidth() / 2f;
-            this.canvas.drawString(text, x, y, font, paint);
+            float baselineY = y - (bounds.getTop() + bounds.getBottom()) / 2f;
+            float startX;
+            if (align == ALIGN_CENTER) {
+                startX = x - (bounds.getLeft() + bounds.getRight()) / 2f;
+            } else if (align == ALIGN_RIGHT) {
+                startX = x - bounds.getRight();
+            } else {
+                startX = x - bounds.getLeft();
+            }
+            this.canvas.drawString(text, startX, baselineY, font, paint);
         }
+    }
+
+    public void drawCenteredText(String text, float cx, float y, float fontSize, int color, boolean bold) {
+        drawText(text, cx, y, fontSize, color, bold, ALIGN_CENTER);
     }
 
     public void drawBoundedText(String text, float x, float y, float size, int color, boolean bold, float maxW) {
@@ -475,12 +574,12 @@ public class SkijaEngine {
     public void drawCenteredIcon(String glyph, float cx, float cy, float size, int color) {
         if (this.canvas == null || glyph == null || glyph.isEmpty()) return;
         try (Paint paint = new Paint();
-             Font font = new Font(this.iconTypeface, size)) {
+             Font font = new Font(this.iconTypeface != null ? this.iconTypeface : this.regularTypeface, size)) {
             paint.setColor(color);
             paint.setAntiAlias(true);
             Rect bounds = font.measureText(glyph, paint);
-            float x = cx - bounds.getWidth() / 2f;
-            float y = cy + bounds.getHeight() / 2f;
+            float x = cx - (bounds.getLeft() + bounds.getRight()) / 2f;
+            float y = cy - (bounds.getTop() + bounds.getBottom()) / 2f;
             this.canvas.drawString(glyph, x, y, font, paint);
         }
     }
@@ -531,15 +630,14 @@ public class SkijaEngine {
         drawRoundedRect(barX, cy - barH / 2f, barW, barH, 1.5f, color);
     }
 
-    public void drawPlayPauseButton(float cx, float cy, float radius, boolean isPlaying, boolean hover, int color) {
+    public void drawPlayPauseButton(float cx, float cy, float radius, boolean isPlaying, boolean isHovered, int accentColor) {
         if (this.canvas == null) return;
-        int bg = hover ? (color & 0x44FFFFFF) : (color & 0x22FFFFFF);
-        drawCircleStroke(cx, cy, radius, bg, color, 1.2f);
-        if (isPlaying) {
-            drawCenteredIcon(ICON_PAUSE, cx, cy + 0.5f, radius * 1.3f, color);
-        } else {
-            drawCenteredIcon(ICON_PLAY, cx + 0.5f, cy + 0.5f, radius * 1.3f, color);
-        }
+        drawDropShadow(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, radius, isHovered ? 12.0f : 6.0f, 1.0f, accentColor & 0x66FFFFFF);
+        int col = isHovered ? (accentColor | 0x222222) : accentColor;
+        drawCircle(cx, cy, radius, col);
+        float iconSize = radius * 1.55f;
+        float offX = isPlaying ? 0.0f : radius * 0.08f;
+        drawCenteredIcon(isPlaying ? ICON_PAUSE : ICON_PLAY, cx + offX, cy, iconSize, 0xFFFFFFFF);
     }
 
     public void drawMiniPlayIcon(float cx, float cy, float size, int color) {
@@ -552,7 +650,7 @@ public class SkijaEngine {
 
     public void drawSkipButton(float cx, float cy, float radius, boolean isForward, boolean isHovered) {
         int iconCol = isHovered ? (this.darkTheme ? 0xFFFFFFFF : 0xFF0F1416) : (this.darkTheme ? 0xFFA0A5B4 : 0xFF646E7B);
-        drawCenteredIcon(isForward ? ICON_SKIP_NEXT : ICON_SKIP_PREV, cx, cy + 0.5f, radius * 1.6f, iconCol);
+        drawCenteredIcon(isForward ? ICON_SKIP_NEXT : ICON_SKIP_PREV, cx, cy, radius * 1.6f, iconCol);
     }
 
     public void drawHeartIcon(float cx, float cy, float size, boolean isFav, boolean isHovered) {
@@ -581,7 +679,7 @@ public class SkijaEngine {
     }
 
     public void drawGearIcon(float cx, float cy, float radius, int color) {
-        drawCenteredIcon(ICON_SETTINGS, cx, cy + 0.5f, radius * 2.2f, color);
+        drawCenteredIcon(ICON_SETTINGS, cx, cy, radius * 2.2f, color);
     }
 
     public void drawMoonSunIcon(float cx, float cy, float radius, boolean dark, int color) {
@@ -589,23 +687,23 @@ public class SkijaEngine {
     }
 
     public void drawSpeakerIcon(float cx, float cy, float radius, boolean muted, int color) {
-        drawCenteredIcon(muted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP, cx, cy, radius * 2.0f, color);
+        drawCenteredIcon(muted ? ICON_VOLUME_OFF : ICON_VOLUME_UP, cx, cy, radius * 2.0f, muted ? 0xFFFF5555 : color);
     }
 
     public void drawRefreshIcon(float cx, float cy, float radius, int color) {
-        drawCenteredIcon(ICON_REFRESH, cx, cy + 0.5f, radius * 2.3f, color);
+        drawCenteredIcon(ICON_REFRESH, cx, cy, radius * 2.3f, color);
     }
 
     public void drawFolderIcon(float cx, float cy, float w, float h, int color) {
-        drawCenteredIcon(ICON_FOLDER, cx, cy + 0.5f, Math.max(w, h) * 1.25f, color);
+        drawCenteredIcon(ICON_FOLDER, cx, cy, Math.max(w, h) * 1.25f, color);
     }
 
     public void drawCrossIcon(float cx, float cy, float size, int color) {
-        drawCenteredIcon(ICON_DELETE, cx, cy + 0.5f, size * 1.55f, color);
+        drawCenteredIcon(ICON_CLOSE, cx, cy, size * 1.55f, color);
     }
 
     public void drawDotsIcon(float cx, float cy, float dotRadius, int color) {
-        drawCenteredIcon(ICON_MORE_VERT, cx, cy + 0.5f, 13.0f, color);
+        drawCenteredIcon(ICON_MORE_VERT, cx, cy, 13.0f, color);
     }
 
     public void drawMiniDisc(float cx, float cy, float radius, int vinylColor, int centerColor) {
@@ -657,21 +755,38 @@ public class SkijaEngine {
         drawCenteredText(text, x + w * 0.5f, y + h * 0.5f + 3.5f, h * 0.52f, textCol, active || hovered);
     }
 
-    public void drawBadge(float x, float y, float h, String text, int color) {
-        if (this.canvas == null) return;
-        float textW = getTextWidth(text, 7.8f, true);
-        float badgeW = textW + 12f;
-        drawRoundedRect(x, y, badgeW, h, h / 2f, color & 0x33FFFFFF);
-        drawRoundedRectOutline(x, y, badgeW, h, h / 2f, 1f, color);
-        drawCenteredText(text, x + badgeW / 2f, y + h / 2f + 3f, 7.8f, color, true);
+    public void drawBadge(float x, float y, float h, String text, int badgeColor) {
+        if (this.canvas == null || text == null || text.isEmpty()) return;
+        float textW = getTextWidth(text, h * 0.65f, true);
+        float pad = 6.0f;
+        float w = textW + pad * 2.0f;
+        float radius = h * 0.5f;
+        drawRoundedRect(x, y, w, h, radius, (badgeColor & 0x00FFFFFF) | 0x28000000);
+        drawRoundedRectOutline(x, y, w, h, radius, 1.0f, badgeColor);
+        drawDropShadow(x, y, w, h, radius, 6.0f, 0.5f, badgeColor & 0x44FFFFFF);
+        drawText(text, x + w * 0.5f, y + h * 0.5f + 0.5f, h * 0.65f, badgeColor, true, ALIGN_CENTER);
     }
 
-    public void drawSourceIcon(float cx, float cy, float radius, String app) {
+    public void drawSourceIcon(float cx, float cy, float radius, String sourceApp) {
         if (this.canvas == null) return;
-        int col = 0xFF388BFD;
-        if (app.contains("yandex") || app.contains("яндекс")) col = 0xFFFF3333;
-        else if (app.contains("spotify") || app.contains("спотифай")) col = 0xFF1DB954;
-        drawCircle(cx, cy, radius, col);
+        String s = sourceApp == null ? "" : sourceApp.toLowerCase();
+        if (s.contains("spotify") || s.contains("спотифай")) {
+            drawCircle(cx, cy, radius, 0xFF1DB954);
+            drawDropShadow(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, radius, 4.0f, 0.5f, 0x441DB954);
+            for (int i = 0; i < 3; ++i) {
+                float r = radius * (0.35f + (float)i * 0.22f);
+                float yOff = cy - radius * 0.1f + (float)i * radius * 0.22f;
+                drawCircleOutline(cx, yOff, r, 0.8f, 0xFFFFFFFF);
+            }
+        } else if (s.contains("yandex") || s.contains("яндекс")) {
+            drawCircle(cx, cy, radius, 0xFFFFCC00);
+            drawDropShadow(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, radius, 4.0f, 0.5f, 0x44FFCC00);
+            drawCenteredIcon(ICON_MUSIC, cx, cy, radius * 1.3f, 0xFF000000);
+        } else {
+            drawCircle(cx, cy, radius, 0xFF0078D7);
+            drawDropShadow(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, radius, 4.0f, 0.5f, 0x440078D7);
+            drawCircleOutline(cx, cy, radius * 0.6f, 0.8f, 0xFFFFFFFF);
+        }
     }
 
     public void drawEqualizerBars(float x, float y, float w, float h, int color, long timeMs) {
@@ -679,8 +794,9 @@ public class SkijaEngine {
         int bars = 4;
         float barW = (w - (bars - 1) * 2f) / bars;
         for (int i = 0; i < bars; i++) {
-            float phase = (float) Math.sin((timeMs / 120.0) + i * 1.3) * 0.5f + 0.5f;
-            float barH = Math.max(2f, h * phase);
+            double wave = Math.sin((double)timeMs * 0.008 + (double)i * 1.3);
+            float pct = (float)(0.25 + 0.75 * Math.abs(wave));
+            float barH = h * pct;
             drawRoundedRect(x + i * (barW + 2f), y + h - barH, barW, barH, 1f, color);
         }
     }
@@ -752,17 +868,36 @@ public class SkijaEngine {
 
     public void drawCover(byte[] imageBytes, float x, float y, float w, float h, float radius) {
         if (this.canvas == null) return;
+        Image img = null;
         if (imageBytes != null && imageBytes.length > 0) {
-            try (Image img = Image.makeFromEncoded(imageBytes)) {
+            if (imageBytes == this.gsmtcCoverBytes) {
+                if (this.gsmtcCoverImage == null) {
+                    try { this.gsmtcCoverImage = Image.makeFromEncoded(imageBytes); } catch (Throwable ignored) {}
+                }
+                img = this.gsmtcCoverImage;
+            } else if (imageBytes == this.localCoverBytes) {
+                if (this.localCoverImage == null) {
+                    try { this.localCoverImage = Image.makeFromEncoded(imageBytes); } catch (Throwable ignored) {}
+                }
+                img = this.localCoverImage;
+            } else {
+                try { img = Image.makeFromEncoded(imageBytes); } catch (Throwable ignored) {}
+            }
+        }
+        if (img != null) {
+            try {
                 this.canvas.save();
                 this.canvas.clipRRect(RRect.makeXYWH(x, y, w, h, radius), true);
                 this.canvas.drawImageRect(img, Rect.makeXYWH(x, y, w, h));
                 this.canvas.restore();
+                if (imageBytes != this.gsmtcCoverBytes && imageBytes != this.localCoverBytes) {
+                    img.close();
+                }
                 return;
             } catch (Throwable ignored) {}
         }
         drawCard(x, y, w, h, radius, darkTheme ? 0xFF2A2A38 : 0xFFE0E0EB, 0x00000000, 0f);
-        drawCenteredIcon(ICON_MUSIC, x + w / 2f, y + h / 2f, w * 0.4f, darkTheme ? 0xFF555566 : 0xFFAAAAAA);
+        drawCenteredIcon(ICON_MUSIC, x + w / 2f, y + h / 2f, w * 0.45f, darkTheme ? 0xFF555566 : 0xFFAAAAAA);
     }
 
     public void drawSvg(byte[] svgBytes, float x, float y, float w, float h) {
@@ -790,12 +925,30 @@ public class SkijaEngine {
         }
     }
 
-    public void updateGsmtcCoverImage(byte[] bytes) {
+    public synchronized void updateGsmtcCoverImage(byte[] bytes) {
         this.gsmtcCoverBytes = bytes;
+        if (this.gsmtcCoverImage != null) {
+            try { this.gsmtcCoverImage.close(); } catch (Throwable ignored) {}
+            this.gsmtcCoverImage = null;
+        }
+        if (bytes != null && bytes.length > 0) {
+            try {
+                this.gsmtcCoverImage = Image.makeFromEncoded(bytes);
+            } catch (Throwable ignored) {}
+        }
     }
 
-    public void updateLocalCoverImage(byte[] bytes) {
+    public synchronized void updateLocalCoverImage(byte[] bytes) {
         this.localCoverBytes = bytes;
+        if (this.localCoverImage != null) {
+            try { this.localCoverImage.close(); } catch (Throwable ignored) {}
+            this.localCoverImage = null;
+        }
+        if (bytes != null && bytes.length > 0) {
+            try {
+                this.localCoverImage = Image.makeFromEncoded(bytes);
+            } catch (Throwable ignored) {}
+        }
     }
 
     public byte[] getGsmtcCoverBytes() {
@@ -804,6 +957,14 @@ public class SkijaEngine {
 
     public byte[] getLocalCoverBytes() {
         return this.localCoverBytes;
+    }
+
+    public Image getGsmtcCoverImage() {
+        return this.gsmtcCoverImage;
+    }
+
+    public Image getLocalCoverImage() {
+        return this.localCoverImage;
     }
 
     private void destroySurface() {
@@ -819,28 +980,61 @@ public class SkijaEngine {
             try { this.dynamicTexture.close(); } catch (Throwable ignored) {}
             this.dynamicTexture = null;
         }
+        this.uiCanvas = null;
+        this.canvas = null;
+    }
+
+    private void destroyHudSurface() {
+        if (this.hudSurface != null) {
+            try { this.hudSurface.close(); } catch (Throwable ignored) {}
+            this.hudSurface = null;
+        }
+        if (this.hudNativeImage != null) {
+            try { this.hudNativeImage.close(); } catch (Throwable ignored) {}
+            this.hudNativeImage = null;
+        }
+        if (this.hudDynamicTexture != null) {
+            try { this.hudDynamicTexture.close(); } catch (Throwable ignored) {}
+            this.hudDynamicTexture = null;
+        }
+        this.hudCanvas = null;
         this.canvas = null;
     }
 
     public synchronized void destroy() {
         destroySurface();
+        destroyHudSurface();
+        if (this.gsmtcCoverImage != null) {
+            try { this.gsmtcCoverImage.close(); } catch (Throwable ignored) {}
+            this.gsmtcCoverImage = null;
+        }
+        if (this.localCoverImage != null) {
+            try { this.localCoverImage.close(); } catch (Throwable ignored) {}
+            this.localCoverImage = null;
+        }
         if (this.regularFont != null) {
             try { this.regularFont.close(); } catch (Throwable ignored) {}
+            this.regularFont = null;
         }
         if (this.boldFont != null) {
             try { this.boldFont.close(); } catch (Throwable ignored) {}
+            this.boldFont = null;
         }
         if (this.iconFont != null) {
             try { this.iconFont.close(); } catch (Throwable ignored) {}
+            this.iconFont = null;
         }
         if (this.regularTypeface != null) {
             try { this.regularTypeface.close(); } catch (Throwable ignored) {}
+            this.regularTypeface = null;
         }
         if (this.boldTypeface != null) {
             try { this.boldTypeface.close(); } catch (Throwable ignored) {}
+            this.boldTypeface = null;
         }
         if (this.iconTypeface != null) {
             try { this.iconTypeface.close(); } catch (Throwable ignored) {}
+            this.iconTypeface = null;
         }
         this.available = false;
     }

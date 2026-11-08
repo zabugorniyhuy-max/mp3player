@@ -159,7 +159,7 @@ public class GsmtcHudOverlay {
 
         int frameW = pillW + 16;
         int frameH = pillH + 16;
-        skija.beginFrame(frameW, frameH);
+        skija.beginHudFrame(frameW, frameH);
 
         float px = 8f;
         float py = 6f;
@@ -194,7 +194,7 @@ public class GsmtcHudOverlay {
             }
             displayTitle = displayTitle + "..";
         }
-        skija.drawText(displayTitle, textX, py + 10f, 10f, 0xFFFFFFFF, true);
+        skija.drawText(displayTitle, textX, py + 8.5f, 10f, 0xFFFFFFFF, true, SkijaEngine.ALIGN_LEFT);
 
         String displaySub = subText;
         if (skija.getTextWidth(displaySub, 8f, false) > maxTitleW) {
@@ -203,8 +203,8 @@ public class GsmtcHudOverlay {
             }
             displaySub = displaySub + "..";
         }
-        skija.drawText(displaySub, textX, py + 17.5f, 8f, 0xFFA0A0B0, false);
-        skija.drawText(timeStr, timeX - timeW, py + 12.5f, 8.5f, 0xFFCCCCCC, true);
+        skija.drawText(displaySub, textX, py + 16.5f, 8f, 0xFFA0A0B0, false, SkijaEngine.ALIGN_LEFT);
+        skija.drawText(timeStr, timeX - timeW, py + 12.0f, 8.5f, 0xFFCCCCCC, true, SkijaEngine.ALIGN_LEFT);
 
         if (isPlaying) {
             skija.drawEqualizerBars(barsX, py + 7f, 10f, 10f, borderColor, System.currentTimeMillis());
@@ -223,10 +223,13 @@ public class GsmtcHudOverlay {
         lastBarX = (int)(x + (textX - px));
         lastBarY = (int)(y + pillH - 2.5f);
         lastBarW = (int)barW;
-        skija.drawSlider(barX, barY, barW, 2.5f, (float)progress, borderColor, 0x33FFFFFF, borderColor);
+        skija.drawRoundedRect(barX, barY, barW, 2.0f, 1.0f, 0x33FFFFFF);
+        if (progress > 0.001) {
+            skija.drawRoundedRect(barX, barY, barW * (float)progress, 2.0f, 1.0f, borderColor);
+        }
 
-        skija.endFrame();
-        skija.renderToContext(ctx, x - 8, y - 6, frameW, frameH);
+        skija.endHudFrame();
+        skija.renderHudToContext(ctx, x - 8, y - 6, frameW, frameH);
     }
 
     private static String formatTime(long seconds) {
