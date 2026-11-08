@@ -223,7 +223,7 @@ public class SkijaEngine {
         if (!this.available || this.dynamicTexture == null) {
             return;
         }
-        ctx.blit(SKIJA_TEXTURE_ID, screenX, screenX + width, screenY, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
+        ctx.blit(SKIJA_TEXTURE_ID, screenX, screenY, screenX + width, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
     }
 
     public synchronized void beginHudFrame(int width, int height) {
@@ -279,7 +279,7 @@ public class SkijaEngine {
         if (!this.available || this.hudDynamicTexture == null) {
             return;
         }
-        ctx.blit(SKIJA_HUD_TEXTURE_ID, screenX, screenX + width, screenY, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
+        ctx.blit(SKIJA_HUD_TEXTURE_ID, screenX, screenY, screenX + width, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
     }
 
     public Canvas getCanvas() {
