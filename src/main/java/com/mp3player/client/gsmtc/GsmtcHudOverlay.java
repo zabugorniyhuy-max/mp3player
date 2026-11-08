@@ -88,16 +88,7 @@ public class GsmtcHudOverlay {
             return;
         }
         boolean hasGsmtc = isGsmtcPlaying || manager.isAvailable() && manager.hasTrack() && !isLocalPlaying;
-        NanoVGEngine nvg = NanoVGEngine.getInstance();
-        if (nvg.isAvailable()) {
-            ctx.extractDeferredElements(screenW, screenH, tickCounter != null ? tickCounter.getGameTimeDeltaPartialTick(true) : 0.0f);
-            float scale = (float)client.getWindow().getGuiScale();
-            nvg.beginFrame(screenW, screenH, scale);
-            GsmtcHudOverlay.renderActiveCapsuleNanoVG(nvg, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
-            nvg.endFrame();
-        } else {
-            GsmtcHudOverlay.renderActiveCapsule(ctx, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
-        }
+        GsmtcHudOverlay.renderActiveCapsule(ctx, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
     }
 
     private static int getGsmtcCoverGlId() {

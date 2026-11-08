@@ -139,8 +139,47 @@ extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
-        if (!NanoVGEngine.getInstance().isAvailable()) {
-            context.fill(0, 0, this.width, this.height, 0x44000000);
+        context.fill(0, 0, this.width, this.height, 0x66000000);
+    }
+
+    private void drawModernTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, int w, int h, String label, boolean selected, int accentColor) {
+        boolean hover = this.isInside(mouseX, mouseY, x, y, w, h);
+        int bg = selected ? this.bgPanel() : (hover ? this.bgHover() : this.bgButton());
+        ctx.fill(x, y, x + w, y + h, this.border());
+        ctx.fill(x + 1, y + 1, x + w - 1, y + h, bg);
+        if (selected) {
+            ctx.fill(x + 2, y, x + w - 2, y + 2, accentColor);
+        }
+        int col = selected ? accentColor : (hover ? accentColor : this.textSecondary());
+        ctx.centeredText(this.font, Component.literal(label), x + w / 2, y + (h - 8) / 2, col);
+    }
+
+    private void drawModernButton(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, int w, int h, String text, boolean active, int activeColor, int normalColor) {
+        boolean hover = this.isInside(mouseX, mouseY, x, y, w, h);
+        int bg = active ? this.bgHover() : (hover ? this.bgHover() : this.bgButton());
+        int border = active ? activeColor : (hover ? this.accent() : this.border());
+        ctx.fill(x, y, x + w, y + h, border);
+        ctx.fill(x + 1, y + 1, x + w - 1, y + h - 1, bg);
+        int col = active ? activeColor : (hover ? this.accent() : normalColor);
+        ctx.centeredText(this.font, Component.literal(text), x + w / 2, y + (h - 8) / 2, col);
+    }
+
+    private void drawModernCard(GuiGraphicsExtractor ctx, int x, int y, int w, int h, int bg, int border) {
+        ctx.fill(x - 1, y + h, x + w + 1, y + h + 2, 0x33000000);
+        ctx.fill(x, y, x + w, y + h, border);
+        ctx.fill(x + 1, y + 1, x + w - 1, y + h - 1, bg);
+    }
+
+    private void drawModernProgressBar(GuiGraphicsExtractor ctx, int x, int y, int w, int h, float progress, boolean hover, int activeColor) {
+        int bg = darkTheme ? 0xFF1E2028 : 0xFFD8DDE6;
+        ctx.fill(x, y, x + w, y + h, bg);
+        int fillW = (int) ((float)w * Math.max(0.0f, Math.min(1.0f, progress)));
+        if (fillW > 0) {
+            ctx.fill(x, y, x + fillW, y + h, activeColor);
+        }
+        if (hover) {
+            int knobX = Math.max(x, Math.min(x + w - 3, x + fillW - 1));
+            ctx.fill(knobX, y - 1, knobX + 3, y + h + 1, 0xFFFFFFFF);
         }
     }
 
@@ -165,62 +204,62 @@ extends Screen {
         int targetY = this.height / 2 - panelH / 2;
         int panelY = (int)((float)(this.height + 20) + (float)(targetY - this.height - 20) * eased);
         int panelX = centerX - panelW / 2;
-        NanoVGEngine nvg = NanoVGEngine.getInstance();
-        boolean useNvg = ModConfig.getInstance().useNanoVG && nvg.isAvailable();
-        if (!this.loggedFirstRender) {
-            this.loggedFirstRender = true;
-            com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] First render: width=" + this.width + ", height=" + this.height + ", useNvg=" + useNvg);
-        }
-        if (useNvg) {
-            float scale = (float)this.minecraft.getWindow().getGuiScale();
-            nvg.beginFrame(this.width, this.height, scale);
-            nvg.drawRoundedRect(0.0f, 0.0f, (float)this.width, (float)this.height, 0.0f, 0x55000000);
-            this.renderScreenNanoVG(nvg, mouseX, mouseY, panelX, panelY, panelW, panelH);
-            nvg.endFrame();
-            return;
-        }
-        int tab0W = this.font.width("Webs / Apps") + 14;
-        int tab1W = this.font.width(DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440")) + 14;
-        int tab2W = this.font.width(DrawUtils.t("Fav", "\u0418\u0437\u0431\u0440")) + 14;
-        this.drawTab(context, mouseX, mouseY, panelX + 10, panelY - 20, "Webs/Apps", 0, "Webs / Apps");
-        this.drawTab(context, mouseX, mouseY, panelX + 10 + tab0W + 4, panelY - 20, DrawUtils.t("MP3", "MP3 \u041f\u043b\u0435\u0435\u0440"), 1, DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440"));
-        this.drawTab(context, mouseX, mouseY, panelX + 10 + tab0W + 4 + tab1W + 4, panelY - 20, DrawUtils.t("Fav", "\u0418\u0437\u0431\u0440"), 2, DrawUtils.t("Favorites", "\u041b\u044e\u0431\u0438\u043c\u044b\u0435 \u043f\u0435\u0441\u043d\u0438"));
-        this.drawTab(context, mouseX, mouseY, panelX + 10 + tab0W + 4 + tab1W + 4 + tab2W + 4, panelY - 20, "SET", 3, "Settings");
-        context.fill(panelX, panelY, panelX + panelW, panelY + panelH, this.bgPanel());
-        context.fill(panelX, panelY, panelX + panelW, panelY + 2, this.accent());
-        this.drawButton(context, mouseX, mouseY, panelX + 4, panelY + 4, 16, 14, darkTheme ? "D" : "L", 200);
-        this.drawButton(context, mouseX, mouseY, panelX + 22, panelY + 4, 20, 14, ModConfig.getInstance().isEnglish ? "EN" : "RU", 204);
+
+        int tab0W = 96;
+        int tab1W = 86;
+        int tab2W = 80;
+        int tab3W = 30;
+        int tab0X = panelX + 10;
+        int tab1X = tab0X + tab0W + 4;
+        int tab2X = tab1X + tab1W + 4;
+        int tab3X = tab2X + tab2W + 4;
+
+        this.drawModernTab(context, mouseX, mouseY, tab0X, panelY - 22, tab0W, 22, "Webs / Apps", this.currentTab == 0, this.accent());
+        this.drawModernTab(context, mouseX, mouseY, tab1X, panelY - 22, tab1W, 22, DrawUtils.t("MP3 Player", "MP3 Плеер"), this.currentTab == 1, this.accent());
+        this.drawModernTab(context, mouseX, mouseY, tab2X, panelY - 22, tab2W, 22, DrawUtils.t("Favorites", "Избранное"), this.currentTab == 2, this.accent());
+        this.drawModernTab(context, mouseX, mouseY, tab3X, panelY - 22, tab3W, 22, "⚙", this.currentTab == 3, this.accent());
+
+        this.drawModernCard(context, panelX, panelY, panelW, panelH, this.bgPanel(), this.border());
+        context.fill(panelX + 12, panelY, panelX + panelW - 12, panelY + 2, this.accent());
+
+        this.drawModernButton(context, mouseX, mouseY, panelX + 8, panelY + 6, 22, 18, darkTheme ? "D" : "L", false, this.accent(), this.textSecondary());
+        this.drawModernButton(context, mouseX, mouseY, panelX + 34, panelY + 6, 26, 18, ModConfig.getInstance().isEnglish ? "EN" : "RU", false, this.accent(), this.textSecondary());
+
+        String title = this.currentTab == 0 ? "Webs / Apps" : (this.currentTab == 1 ? DrawUtils.t("MP3 Player", "MP3 Плеер") : (this.currentTab == 2 ? DrawUtils.t("Favorites", "Любимые песни") : DrawUtils.t("Settings & Help", "Настройки и Справка")));
+        context.centeredText(this.font, Component.literal(title), centerX, panelY + 10, this.accent());
+
         boolean mg = ModConfig.getInstance().muteGlobal;
-        this.drawButton(context, mouseX, mouseY, panelX + panelW - 24, panelY + 4, 18, 14, mg ? "X" : "\u266a", 203, mg ? -43691 : this.textSecondary());
+        this.drawModernButton(context, mouseX, mouseY, panelX + panelW - 90, panelY + 6, 22, 18, mg ? "✕" : "♪", mg, 0xFFFF5555, mg ? 0xFFFF5555 : this.textSecondary());
+
         boolean sm = ModConfig.getInstance().speakerMode;
-        this.drawButton(context, mouseX, mouseY, panelX + panelW - 84, panelY + 4, 55, 14, DrawUtils.t("Speaker", "\u041a\u043e\u043b\u043e\u043d\u043a\u0430"), 202, sm ? this.accent() : this.textSecondary());
+        this.drawModernButton(context, mouseX, mouseY, panelX + panelW - 64, panelY + 6, 56, 18, DrawUtils.t("Speaker", "Колонка"), sm, this.accent(), sm ? this.accent() : this.textSecondary());
         if (sm) {
-            context.fill(panelX + panelW - 84, panelY + 16, panelX + panelW - 29, panelY + 18, this.accent());
+            context.fill(panelX + panelW - 64, panelY + 22, panelX + panelW - 8, panelY + 24, this.accent());
         }
-        String title = this.currentTab == 0 ? "Webs / Apps" : (this.currentTab == 1 ? DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440") : (this.currentTab == 2 ? DrawUtils.t("Favorites", "\u041b\u044e\u0431\u0438\u043c\u044b\u0435 \u043f\u0435\u0441\u043d\u0438") : DrawUtils.t("Settings & Help", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0438 \u0421\u043f\u0440\u0430\u0432\u043a\u0430")));
-        DrawUtils.drawText(context, this.font, title, panelX + 45, panelY + 7, this.accent(), true);
+
         if (this.currentTab == 0) {
             this.renderOnlineTab(context, mouseX, mouseY, panelX, panelY, panelW, panelH);
         } else if (this.currentTab == 1) {
             this.renderLocalTab(context, mouseX, mouseY, panelX, panelY, panelW, panelH, false);
+            this.renderPlayerBar(context, mouseX, mouseY, panelX + 8, panelY + panelH - 70, panelW - 16);
         } else if (this.currentTab == 2) {
             this.renderLocalTab(context, mouseX, mouseY, panelX, panelY, panelW, panelH, true);
+            this.renderPlayerBar(context, mouseX, mouseY, panelX + 8, panelY + panelH - 70, panelW - 16);
         } else if (this.currentTab == 3) {
             this.renderSettingsTab(context, mouseX, mouseY, panelX, panelY, panelW, panelH);
         }
-        if (this.currentTab == 1 || this.currentTab == 2) {
-            this.renderPlayerBar(context, mouseX, mouseY, panelX, panelY + panelH - 55, panelW);
-        }
+
         if (this.trackMenuIndex != -1) {
             this.renderTrackMenu(context, mouseX, mouseY);
         }
+
         int uploads = FileSenderManager.getInstance().getUploadsCount();
         int downloads = FileReceiverManager.getInstance().getDownloadsCount();
         if (uploads > 0) {
-            DrawUtils.drawText(context, this.font, DrawUtils.t("Uploading: ", "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432: ") + uploads, panelX + panelW - 120, panelY - 12, this.accent(), true);
+            DrawUtils.drawText(context, this.font, DrawUtils.t("Uploading: ", "Отправка файлов: ") + uploads, panelX + panelW - 120, panelY - 12, this.accent(), true);
         }
         if (downloads > 0) {
-            DrawUtils.drawText(context, this.font, DrawUtils.t("Downloading: ", "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435: ") + downloads, panelX + panelW - 120, panelY - 24, -11141291, true);
+            DrawUtils.drawText(context, this.font, DrawUtils.t("Downloading: ", "Скачивание: ") + downloads, panelX + panelW - 120, panelY - 24, 0xFF55FF55, true);
         }
         super.extractRenderState(context, mouseX, mouseY, delta);
     }
@@ -1084,243 +1123,388 @@ extends Screen {
     }
 
     private void renderOnlineTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
-        int contentY = py + 26;
-        int contentH = ph - 34;
-        ctx.fill(px + 9, contentY - 1, px + pw - 9, contentY + contentH + 1, this.border());
-        ctx.fill(px + 10, contentY, px + pw - 10, contentY + contentH, this.bgDark());
-
+        boolean isSpotify;
         boolean hasTrack = this.gsmtc.isAvailable() && this.gsmtc.hasTrack();
-        if (!hasTrack) {
-            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("No browser/app music detected", "\u041c\u0443\u0437\u044b\u043a\u0430 \u0438\u0437 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430/\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430")), px + pw / 2, contentY + 30, this.textSecondary());
-            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("Open Yandex Music, Spotify, VK, YouTube, etc.", "\u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u042f\u043d\u0434\u0435\u043a\u0441.\u041c\u0443\u0437\u044b\u043a\u0443, Spotify, VK, YouTube \u0438 \u0442.\u0434.")), px + pw / 2, contentY + 50, this.accent());
-            ctx.centeredText(this.font, (Component)Component.literal(DrawUtils.t("And start playing in Windows", "\u0418 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u0435 \u0442\u0440\u0435\u043a \u0432 Windows")), px + pw / 2, contentY + 70, this.textSecondary());
-            return;
+        boolean playing = this.gsmtc.isPlaying();
+        boolean sm = ModConfig.getInstance().speakerMode;
+        String sourceApp = hasTrack ? this.gsmtc.getSourceApp().toLowerCase() : "";
+        boolean isYandex = hasTrack && (sourceApp.contains("yandex") || sourceApp.contains("яндекс"));
+        isSpotify = hasTrack && (sourceApp.contains("spotify") || sourceApp.contains("спотифай"));
+        String rawSourceName = isYandex ? "Яндекс.Музыка" : (isSpotify ? "Spotify" : (hasTrack ? "Windows / Web" : DrawUtils.t("Not Connected", "Не подключено")));
+        String sourceName = sm ? DrawUtils.t("Speaker • ", "Колонка • ") + rawSourceName : rawSourceName;
+        int sourceColor = sm ? -19712 : (isYandex ? -13312 : (isSpotify ? -14829228 : -16739073));
+
+        int cardX = px + 8;
+        int cardY = py + 42;
+        int cardW = pw - 16;
+        int cardH = 74;
+        this.drawModernCard(ctx, cardX, cardY, cardW, cardH, this.bgDark(), hasTrack ? sourceColor : this.border());
+
+        int coverSize = 58;
+        int coverX = cardX + 8;
+        int coverY = cardY + 8;
+        if (hasTrack && this.gsmtc.hasCover()) {
+            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, coverX, coverY, coverSize, coverSize, 0.0f, 1.0f, 0.0f, 1.0f);
+        } else {
+            ctx.fill(coverX, coverY, coverX + coverSize, coverY + coverSize, this.bgButton());
+            ctx.centeredText(this.font, Component.literal("♪"), coverX + coverSize / 2, coverY + coverSize / 2 - 4, this.accent());
         }
 
-        String title = this.gsmtc.getTitle();
-        String artist = this.gsmtc.getArtist();
-        if (title.length() > 34) title = title.substring(0, 32) + "..";
-        if (artist.length() > 34) artist = artist.substring(0, 32) + "..";
-        String src = this.gsmtc.getSourceApp();
-        String status = this.gsmtc.isPlaying() ? DrawUtils.t("Playing", "\u0418\u0433\u0440\u0430\u0435\u0442") : DrawUtils.t("Paused", "\u041f\u0430\u0443\u0437\u0430");
+        int infoX = cardX + 74;
+        int badgeW = this.font.width(sourceName) + 10;
+        this.drawModernButton(ctx, mouseX, mouseY, infoX, cardY + 8, badgeW, 14, sourceName, true, sourceColor, sourceColor);
 
-        DrawUtils.drawText(ctx, this.font, (src.isEmpty() ? "Webs / Apps" : src) + " \u2022 " + status, px + 20, contentY + 12, this.accent(), false);
-        DrawUtils.drawText(ctx, this.font, title, px + 20, contentY + 28, this.textPrimary(), true);
-        DrawUtils.drawText(ctx, this.font, artist, px + 20, contentY + 44, this.textSecondary(), false);
+        String statusText = hasTrack ? (playing ? "● " + DrawUtils.t("Playing", "Играет") : "II " + DrawUtils.t("Paused", "Пауза")) : DrawUtils.t("Waiting for music...", "Ожидание трека...");
+        int statusColor = hasTrack ? (playing ? 0xFF55FF55 : this.textSecondary()) : this.textSecondary();
+        DrawUtils.drawText(ctx, this.font, statusText, infoX + badgeW + 6, cardY + 11, statusColor, false);
 
-        float fraction = (float)this.gsmtc.getProgressFraction();
-        int barX = px + 20;
-        int barY = contentY + 65;
-        int barW = pw - 40;
-        ctx.fill(barX, barY, barX + barW, barY + 4, this.border());
-        ctx.fill(barX, barY, barX + (int)((float)barW * Math.min(1.0f, Math.max(0.0f, fraction))), barY + 4, this.accent());
-        DrawUtils.drawText(ctx, this.font, this.gsmtc.getFormattedPosition(), barX, barY + 6, this.textSecondary(), false);
-        DrawUtils.drawText(ctx, this.font, this.gsmtc.getFormattedDuration(), barX + barW - 25, barY + 6, this.textSecondary(), false);
+        String title = hasTrack ? this.gsmtc.getTitle() : DrawUtils.t("Turn on music in browser or app", "Включите музыку в браузере или приложении");
+        if (title.isEmpty()) title = DrawUtils.t("No title", "Без названия");
+        if (this.font.width(title) > cardW - 84) {
+            while (title.length() > 3 && this.font.width(title + "..") > cardW - 84) {
+                title = title.substring(0, title.length() - 1);
+            }
+            title = title + "..";
+        }
+        DrawUtils.drawText(ctx, this.font, title, infoX, cardY + 28, this.textPrimary(), true);
 
-        this.drawButton(ctx, mouseX, mouseY, px + pw / 2 - 45, contentY + 85, 24, 16, "|<", 10);
-        this.drawButton(ctx, mouseX, mouseY, px + pw / 2 - 15, contentY + 83, 30, 20, this.gsmtc.isPlaying() ? "||" : ">", 11);
-        this.drawButton(ctx, mouseX, mouseY, px + pw / 2 + 21, contentY + 85, 24, 16, ">|", 12);
+        String artist = hasTrack ? this.gsmtc.getArtist() : "";
+        String album = hasTrack ? this.gsmtc.getAlbum() : "";
+        String sub = artist;
+        if (!album.isEmpty() && !album.equalsIgnoreCase(title)) {
+            sub = artist.isEmpty() ? album : artist + " — " + album;
+        }
+        if (!sub.isEmpty()) {
+            if (this.font.width(sub) > cardW - 84) {
+                while (sub.length() > 3 && this.font.width(sub + "..") > cardW - 84) {
+                    sub = sub.substring(0, sub.length() - 1);
+                }
+                sub = sub + "..";
+            }
+            DrawUtils.drawText(ctx, this.font, sub, infoX, cardY + 44, this.textSecondary(), false);
+        }
+
+        long curSec = (long)this.gsmtc.getPosition();
+        long durSec = (long)this.gsmtc.getDuration();
+        float prog = durSec > 0L ? (float)Math.max(0.0, Math.min(1.0, (double)curSec / (double)durSec)) : 0.0f;
+        if (this.draggingGsmtcSeek && this.draggedGsmtcSeekFraction >= 0.0f) {
+            prog = this.draggedGsmtcSeekFraction;
+            curSec = (long)((float)durSec * prog);
+        }
+
+        int timeY = py + 120;
+        DrawUtils.drawText(ctx, this.font, this.formatTime(curSec), px + 12, timeY, this.textSecondary(), false);
+        DrawUtils.drawText(ctx, this.font, this.formatTime(durSec), px + pw - 30, timeY, this.textSecondary(), false);
+
+        int sbX = px + 44;
+        int sbW = pw - 88;
+        int sbY = timeY + 2;
+        boolean hoverSeek = this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10);
+        this.drawModernProgressBar(ctx, sbX, sbY, sbW, 4, prog, hoverSeek, sourceColor);
+
+        int btnY = py + 140;
+        int btnS = 16;
+        int btnW_10 = 20;
+        int playCx = px + pw / 2;
+        int btnRewX = playCx - 14 - btnW_10;
+        int btnPrevX = btnRewX - 4 - btnS;
+        int dlBtnW = 54;
+        int dlBtnH = 18;
+        int dlBtnX = btnPrevX - 6 - dlBtnW;
+        int dlBtnY = btnY;
+        int btnFwdX = playCx + 14;
+        int btnNextX = btnFwdX + btnW_10 + 4;
+        int volIconX = btnNextX + btnS + 8;
+        int volBarX = volIconX + 12;
+        int volBarW = 46;
+
+        String dlText = DrawUtils.t("Add", "Добавить");
+        if (!this.downloadStatus.isEmpty() && System.currentTimeMillis() - this.downloadStatusTimestamp < 4000L) {
+            dlText = this.downloadStatus;
+        }
+        this.drawModernButton(ctx, mouseX, mouseY, dlBtnX, dlBtnY, dlBtnW, dlBtnH, dlText, false, this.accent(), this.accent());
+
+        this.drawModernButton(ctx, mouseX, mouseY, btnPrevX, btnY, btnS, btnS, "⏮", false, this.accent(), this.textSecondary());
+        this.drawModernButton(ctx, mouseX, mouseY, btnRewX, btnY, btnW_10, btnS, "-10", false, this.accent(), this.textSecondary());
+
+        this.drawModernButton(ctx, mouseX, mouseY, playCx - 10, btnY - 2, 20, 20, playing ? "⏸" : "▶", playing, sourceColor, sourceColor);
+
+        this.drawModernButton(ctx, mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS, "+10", false, this.accent(), this.textSecondary());
+        this.drawModernButton(ctx, mouseX, mouseY, btnNextX, btnY, btnS, btnS, "⏭", false, this.accent(), this.textSecondary());
+
+        float extVol = this.gsmtc.getVolume();
+        boolean hoverVol = this.isInside(mouseX, mouseY, volBarX - 4, btnY - 2, volBarW + 8, 16);
+        DrawUtils.drawText(ctx, this.font, extVol <= 0.01f ? "🔇" : "🔊", volIconX, btnY + 4, this.textSecondary(), false);
+        this.drawModernProgressBar(ctx, volBarX, btnY + 7, volBarW, 4, extVol, hoverVol, sourceColor);
+        DrawUtils.drawText(ctx, this.font, (int)(extVol * 100.0f) + "%", volBarX + volBarW + 4, btnY + 4, this.textSecondary(), false);
+
+        if (sm) {
+            int auxY = py + 164;
+            int rangeBoxW = 150;
+            int rangeBoxX = playCx - rangeBoxW / 2;
+            this.drawModernCard(ctx, rangeBoxX, auxY - 2, rangeBoxW, 18, this.bgDark(), this.accent());
+            String rangeStr = ModConfig.getInstance().speakerRange + "m";
+            DrawUtils.drawText(ctx, this.font, "🔊 " + rangeStr, rangeBoxX + 6, auxY + 3, this.accent(), false);
+            int sliderX = rangeBoxX + 54;
+            int sliderW = rangeBoxW - 60;
+            float rProgress = (float)(ModConfig.getInstance().speakerRange - 8) / 56.0f;
+            boolean hoverSlider = this.isInside(mouseX, mouseY, sliderX - 4, auxY - 2, sliderW + 8, 18);
+            this.drawModernProgressBar(ctx, sliderX, auxY + 6, sliderW, 4, rProgress, hoverSlider, this.accent());
+        }
     }
 
     private void renderSettingsTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph) {
-        int contentY = py + 26;
-        int contentH = ph - 34;
-        ctx.fill(px + 9, contentY - 1, px + pw - 9, contentY + contentH + 1, this.border());
-        ctx.fill(px + 10, contentY, px + pw - 10, contentY + contentH, this.bgDark());
+        int sx = px + 8;
+        int sy = py + 30;
+        int sw = pw - 16;
+        int sh = ph - 36;
+        this.drawModernCard(ctx, sx, sy, sw, sh, this.bgDark(), this.border());
 
-        int curY = contentY + 10;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Volume: ", "\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c: ") + (int)(this.localPlayer.getVolume() * 100.0f) + "%", px + 20, curY, this.textPrimary(), false);
-        curY += 20;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Speaker Range: ", "\u0420\u0430\u0434\u0438\u0443\u0441 \u043a\u043e\u043b\u043e\u043d\u043a\u0438: ") + ModConfig.getInstance().speakerRange + "m", px + 20, curY, this.textPrimary(), false);
-        curY += 20;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Theme: ", "\u0422\u0435\u043c\u0430: ") + (darkTheme ? DrawUtils.t("Dark", "\u0422\u0435\u043c\u043d\u0430\u044f") : DrawUtils.t("Light", "\u0421\u0432\u0435\u0442\u043b\u0430\u044f")), px + 20, curY, this.textSecondary(), false);
-        curY += 16;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Language: ", "\u042f\u0437\u044b\u043a: ") + (ModConfig.getInstance().isEnglish ? "English" : "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"), px + 20, curY, this.textSecondary(), false);
-        curY += 20;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Keybinds:", "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435:"), px + 20, curY, this.accent(), true);
-        curY += 14;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Right Shift: Open/Close Menu", "Right Shift: \u041e\u0442\u043a\u0440\u044b\u0442\u044c/\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043c\u0435\u043d\u044e"), px + 20, curY, this.textSecondary(), false);
-        curY += 12;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("P: Play / Pause", "P: \u041f\u0430\u0443\u0437\u0430 / \u0412\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u0435"), px + 20, curY, this.textSecondary(), false);
-        curY += 12;
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("]: Next track  [: Prev track", "]: \u0421\u043b\u0435\u0434. \u0442\u0440\u0435\u043a  [: \u041f\u0440\u0435\u0434. \u0442\u0440\u0435\u043a"), px + 20, curY, this.textSecondary(), false);
+        int cy = sy + 8 - this.settingsScroll;
+        int cardX = sx + 8;
+        int cardW = sw - 16;
+
+        ctx.enableScissor(sx + 2, sy + 2, sx + sw - 2, sy + sh - 2);
+
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("APPEARANCE & INTERFACE", "ВНЕШНИЙ ВИД И ИНТЕРФЕЙС"), sx + 12, cy + 6, this.accent(), true);
+        int card1Y = cy + 18;
+        int card1H = 80;
+        this.drawModernCard(ctx, cardX, card1Y, cardW, card1H, this.bgPanel(), this.border());
+
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Theme Mode", "Тема оформления"), cardX + 14, card1Y + 9, this.textPrimary(), false);
+        int pillThemeW = 84;
+        int pillThemeH = 18;
+        int pillThemeX = cardX + cardW - pillThemeW - 10;
+        int pillThemeY = card1Y + 4;
+        String themeText = darkTheme ? DrawUtils.t("Dark", "Тёмная") : DrawUtils.t("Light", "Светлая");
+        this.drawModernButton(ctx, mouseX, mouseY, pillThemeX, pillThemeY, pillThemeW, pillThemeH, themeText, false, this.accent(), this.textPrimary());
+
+        ctx.fill(cardX + 10, card1Y + 26, cardX + cardW - 10, card1Y + 27, this.border());
+
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Interface Language", "Язык интерфейса"), cardX + 14, card1Y + 35, this.textPrimary(), false);
+        int pillLangW = 84;
+        int pillLangH = 18;
+        int pillLangX = cardX + cardW - pillLangW - 10;
+        int pillLangY = card1Y + 30;
+        String langText = ModConfig.getInstance().isEnglish ? "English" : "Русский";
+        this.drawModernButton(ctx, mouseX, mouseY, pillLangX, pillLangY, pillLangW, pillLangH, langText, false, this.accent(), this.textPrimary());
+
+        ctx.fill(cardX + 10, card1Y + 52, cardX + cardW - 10, card1Y + 53, this.border());
+
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Dynamic Island HUD", "Оверлей Dynamic Island"), cardX + 14, card1Y + 61, this.textPrimary(), false);
+        int pillHudW = 84;
+        int pillHudH = 18;
+        int pillHudX = cardX + cardW - pillHudW - 10;
+        int pillHudY = card1Y + 56;
+        boolean hudActive = this.gsmtc.isHudEnabled();
+        String hudText = hudActive ? DrawUtils.t("ON", "ВКЛ") : DrawUtils.t("OFF", "ВЫКЛ");
+        this.drawModernButton(ctx, mouseX, mouseY, pillHudX, pillHudY, pillHudW, pillHudH, hudText, hudActive, 0xFF00AAFF, hudActive ? 0xFF00AAFF : this.textSecondary());
+
+        int sec2Y = cy + 108;
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("AUDIO & 3D SPEAKER", "ЗВУК И 3D КОЛОНКА"), sx + 12, sec2Y + 6, -19712, true);
+        int card2Y = sec2Y + 18;
+        int card2H = 92;
+        this.drawModernCard(ctx, cardX, card2Y, cardW, card2H, this.bgPanel(), this.border());
+
+        int btnW = (cardW - 28) / 2;
+        int btnH = 20;
+        int btn1X = cardX + 10;
+        int btn1Y = card2Y + 6;
+        int btn2X = cardX + 18 + btnW;
+        int btn2Y = card2Y + 6;
+
+        boolean soundOn = !ModConfig.getInstance().muteGlobal;
+        String soundText = soundOn ? DrawUtils.t("Sound: ON", "Звук: ВКЛ") : DrawUtils.t("Sound: OFF", "Звук: ВЫКЛ");
+        this.drawModernButton(ctx, mouseX, mouseY, btn1X, btn1Y, btnW, btnH, soundText, soundOn, this.accent(), soundOn ? this.accent() : this.textSecondary());
+
+        boolean spkOn = ModConfig.getInstance().speakerMode;
+        String spkText = spkOn ? DrawUtils.t("3D: ON", "3D: ВКЛ") : DrawUtils.t("3D: OFF", "3D: ВЫКЛ");
+        this.drawModernButton(ctx, mouseX, mouseY, btn2X, btn2Y, btnW, btnH, spkText, spkOn, -19712, spkOn ? -19712 : this.textSecondary());
+
+        ctx.fill(cardX + 10, card2Y + 31, cardX + cardW - 10, card2Y + 32, this.border());
+
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("3D Sound Radius", "Радиус 3D звука"), cardX + 14, card2Y + 41, -19712, false);
+        int slRangeW = 108;
+        int badgeW = 34;
+        int badgeH = 16;
+        int badgeX = cardX + cardW - badgeW - 10;
+        int badgeY = card2Y + 37;
+        int slRangeX = badgeX - slRangeW - 8;
+        int slRangeY = card2Y + 42;
+        this.drawModernButton(ctx, mouseX, mouseY, badgeX, badgeY, badgeW, badgeH, ModConfig.getInstance().speakerRange + "m", true, -19712, -19712);
+        float rProg = (float)(ModConfig.getInstance().speakerRange - 8) / 56.0f;
+        boolean hoverRange = this.isInside(mouseX, mouseY, slRangeX - 4, slRangeY - 5, slRangeW + 8, 16);
+        this.drawModernProgressBar(ctx, slRangeX, slRangeY, slRangeW, 6, rProg, hoverRange, -19712);
+
+        ctx.fill(cardX + 10, card2Y + 61, cardX + cardW - 10, card2Y + 62, this.border());
+
+        float curVol = this.localPlayer.getVolume();
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("MP3 Music Volume", "Громкость MP3"), cardX + 14, card2Y + 71, this.accent(), false);
+        int slVolW = 108;
+        int badgeVolX = cardX + cardW - badgeW - 10;
+        int badgeVolY = card2Y + 67;
+        int slVolX = badgeVolX - slVolW - 8;
+        int slVolY = card2Y + 72;
+        this.drawModernButton(ctx, mouseX, mouseY, badgeVolX, badgeVolY, badgeW, badgeH, (int)(curVol * 100.0f) + "%", true, this.accent(), this.accent());
+        boolean hoverVol = this.isInside(mouseX, mouseY, slVolX - 4, slVolY - 5, slVolW + 8, 16);
+        this.drawModernProgressBar(ctx, slVolX, slVolY, slVolW, 6, curVol, hoverVol, this.accent());
+
+        ctx.disableScissor();
+
+        int totalContentH = card2Y + card2H + 16 - cy;
+        this.maxSettingsScroll = Math.max(0, totalContentH - sh);
+        this.settingsScroll = Math.max(0, Math.min(this.maxSettingsScroll, this.settingsScroll));
+        if (this.maxSettingsScroll > 0) {
+            float scrollFrac = (float)this.settingsScroll / (float)this.maxSettingsScroll;
+            float trackH = sh - 10;
+            float scrollbarH = Math.max(24.0f, trackH * ((float)sh / (float)(sh + this.maxSettingsScroll)));
+            float scrollbarY = (float)(sy + 5) + (trackH - scrollbarH) * scrollFrac;
+            float scrollbarX = sx + sw - 6;
+            ctx.fill((int)scrollbarX, (int)scrollbarY, (int)scrollbarX + 3, (int)(scrollbarY + scrollbarH), 0x66FFFFFF);
+        }
     }
 
     private void renderLocalTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw, int ph, boolean showFavorites) {
-        int topY = py + 22;
         List<File> playlist = showFavorites ? this.localPlayer.getFavorites() : this.localPlayer.getPlaylist();
-        this.drawButton(ctx, mouseX, mouseY, px + 8, topY - 2, 22, 16, "R", 110);
-        this.drawButton(ctx, mouseX, mouseY, px + 34, topY - 2, 22, 16, "DIR", 111);
-        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Tracks: ", "\u0422\u0440\u0435\u043a\u043e\u0432: ") + playlist.size(), px + 65, topY, this.textSecondary(), false);
+        this.drawModernButton(ctx, mouseX, mouseY, px + 8, py + 28, 22, 16, "⟳", this.pressedButtons.contains(110), this.accent(), this.textSecondary());
+        this.drawModernButton(ctx, mouseX, mouseY, px + 34, py + 28, 22, 16, "📁", this.pressedButtons.contains(111), this.accent(), this.textSecondary());
+        DrawUtils.drawText(ctx, this.font, DrawUtils.t("Tracks: ", "Треков: ") + playlist.size(), px + 62, py + 32, this.textSecondary(), false);
         if (this.localPlayer.isConverting()) {
-            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Converting MP3...", "\u041a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f MP3..."), px + 140, topY, this.accent(), false);
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Converting MP3...", "Конвертация MP3..."), px + 130, py + 32, this.accent(), true);
         }
-        int listY = topY + 18;
-        int listH = ph - 90;
-        ctx.fill(px + 9, listY - 1, px + pw - 9, listY + listH + 1, this.border());
-        ctx.fill(px + 10, listY, px + pw - 10, listY + listH, this.bgDark());
+
+        int listX = px + 8;
+        int listY = py + 48;
+        int listW = pw - 16;
+        int listH = 74;
+        this.drawModernCard(ctx, listX, listY, listW, listH, this.bgDark(), this.border());
+
         if (playlist.isEmpty()) {
-            ctx.centeredText(this.font, Component.literal(DrawUtils.t("Add .mp3 or .wav to mp3player folder", "Закиньте .mp3 или .wav в папку mp3player")), px + pw / 2, listY + listH / 2 - 10, this.textSecondary());
-            ctx.centeredText(this.font, Component.literal(DrawUtils.t("MP3s are converted automatically", "MP3 конвертируются автоматически")), px + pw / 2, listY + listH / 2 + 5, this.textSecondary());
+            ctx.centeredText(this.font, Component.literal(DrawUtils.t("Add .mp3 or .wav to mp3player folder", "Закиньте .mp3 или .wav в папку mp3player")), listX + listW / 2, listY + listH / 2 - 8, this.textSecondary());
+            ctx.centeredText(this.font, Component.literal(DrawUtils.t("MP3s are converted automatically", "MP3 конвертируются автоматически")), listX + listW / 2, listY + listH / 2 + 6, this.textSecondary());
         } else {
-            int scroll;
-            int tY = listY + 2;
-            for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 7); ++i) {
-                Object name;
-                int dot;
+            int scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll;
+            for (int i = scroll; i < Math.min(playlist.size(), scroll + 4); ++i) {
+                int itemY = listY + 3 + (i - scroll) * 17;
+                int itemX = listX + 2;
+                int itemW = listW - 4;
+                int itemH = 15;
                 File f = playlist.get(i);
-                boolean hover = mouseX >= px + 10 && mouseX < px + pw - 10 && mouseY >= tY && mouseY < tY + 12;
+                boolean hover = this.isInside(mouseX, mouseY, itemX, itemY, itemW, itemH);
                 boolean current = f.equals(this.localPlayer.getPlaylist().isEmpty() ? null : this.localPlayer.getPlaylist().get(this.localPlayer.getCurrentIndex())) && this.localPlayer.isPlaying();
                 boolean isFav = this.localPlayer.getFavorites().contains(f);
+
                 if (hover) {
-                    ctx.fill(px + 10, tY, px + pw - 10, tY + 12, this.bgHover());
+                    ctx.fill(itemX, itemY, itemX + itemW, itemY + itemH, this.bgHover());
                 }
                 if (current) {
-                    ctx.fill(px + 10, tY, px + 13, tY + 12, this.accent());
+                    ctx.fill(itemX, itemY, itemX + 3, itemY + itemH, this.accent());
                 }
-                if ((dot = ((String)(name = f.getName())).lastIndexOf(46)) > 0) {
-                    name = ((String)name).substring(0, dot);
+
+                String playIcon = current ? "▶" : (isFav ? "★" : "♪");
+                int iconColor = current ? this.accent() : (isFav ? 0xFFFFAA00 : this.textSecondary());
+                DrawUtils.drawText(ctx, this.font, playIcon, itemX + 6, itemY + 4, iconColor, false);
+
+                String name = f.getName();
+                int dot = name.lastIndexOf('.');
+                if (dot > 0) name = name.substring(0, dot);
+                if (this.font.width(name) > itemW - 68) {
+                    while (name.length() > 3 && this.font.width(name + "..") > itemW - 68) {
+                        name = name.substring(0, name.length() - 1);
+                    }
+                    name = name + "..";
                 }
-                if (((String)name).length() > 28) {
-                    name = ((String)name).substring(0, 26) + "..";
-                }
-                String prefix = current ? "> " : (isFav ? "* " : "  ");
-                DrawUtils.drawText(ctx, this.font, prefix + (String)name, px + 14, tY + 2, current ? this.accent() : this.textPrimary(), false);
-                boolean hoverPlay = this.isInside(mouseX, mouseY, px + pw - 55, tY, 15, 12);
-                boolean hoverDel = this.isInside(mouseX, mouseY, px + pw - 38, tY, 15, 12);
-                boolean hoverDots = this.isInside(mouseX, mouseY, px + pw - 22, tY, 15, 12);
-                String playIcon = current ? "||" : ">";
-                DrawUtils.drawText(ctx, this.font, playIcon, px + pw - 53, tY + 2, hoverPlay ? this.accent() : this.textSecondary(), false);
-                DrawUtils.drawText(ctx, this.font, "x", px + pw - 36, tY + 2, hoverDel ? -43691 : this.textSecondary(), false);
-                DrawUtils.drawText(ctx, this.font, ":", px + pw - 20, tY + 2, hoverDots ? this.accent() : this.textSecondary(), false);
-                tY += 14;
+                DrawUtils.drawText(ctx, this.font, name, itemX + 18, itemY + 4, current ? this.accent() : this.textPrimary(), false);
+
+                boolean hoverDel = this.isInside(mouseX, mouseY, itemX + itemW - 40, itemY + 1, 16, 13);
+                ctx.fill(itemX + itemW - 40, itemY + 1, itemX + itemW - 24, itemY + 14, hoverDel ? this.bgButton() : 0);
+                DrawUtils.drawText(ctx, this.font, "✖", itemX + itemW - 36, itemY + 3, hoverDel ? 0xFFFF5555 : this.textSecondary(), false);
+
+                boolean hoverDots = this.isInside(mouseX, mouseY, itemX + itemW - 20, itemY + 1, 16, 13);
+                ctx.fill(itemX + itemW - 20, itemY + 1, itemX + itemW - 4, itemY + 14, hoverDots ? this.bgButton() : 0);
+                DrawUtils.drawText(ctx, this.font, "⋮", itemX + itemW - 14, itemY + 3, hoverDots ? this.accent() : this.textSecondary(), false);
             }
         }
     }
 
-    private void renderPlayerBar(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int px, int py, int pw) {
-        int maxLen;
+    private void renderPlayerBar(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int barX, int barY, int barW) {
         boolean sm = ModConfig.getInstance().speakerMode;
-        boolean hasGsmtc = this.gsmtc.isAvailable() && this.gsmtc.hasTrack();
-        boolean localActive = this.localPlayer.isPlaying() || this.localPlayer.getCurrentPosition() > 0L;
-        boolean fromGsmtc = hasGsmtc && (!localActive || this.gsmtc.isPlaying());
-        String sourceApp = fromGsmtc ? this.gsmtc.getSourceApp().toLowerCase() : "";
-        boolean isYandex = fromGsmtc && (sourceApp.contains("yandex") || sourceApp.contains("\u044f\u043d\u0434\u0435\u043a\u0441"));
-        boolean isSpotify = fromGsmtc && (sourceApp.contains("spotify") || sourceApp.contains("\u0441\u043f\u043e\u0442\u0438\u0444\u0430\u0439"));
-        int outlineColor = 0;
-        String badge = "";
-        int badgeColor = 0;
-        if (sm) {
-            outlineColor = this.accent();
-            badge = DrawUtils.t("Speaker", "\u041a\u043e\u043b\u043e\u043d\u043a\u0430");
-            badgeColor = this.accent();
-        } else if (isYandex) {
-            outlineColor = -13312;
-            badge = "\u042f.\u041c\u0443\u0437\u044b\u043a\u0430";
-            badgeColor = -13312;
-        } else if (isSpotify) {
-            outlineColor = -14829228;
-            badge = "Spotify";
-            badgeColor = -14829228;
-        } else if (fromGsmtc) {
-            outlineColor = -16739073;
-            badge = "Windows";
-            badgeColor = -16739073;
-        }
-        if (outlineColor != 0) {
-            ctx.fill(px - 1, py - 1, px + pw + 1, py + 56, outlineColor);
-            ctx.fill(px, py, px + pw, py + 55, this.bgDark());
-        } else {
-            ctx.fill(px, py, px + pw, py + 55, this.bgButton());
-            ctx.fill(px, py, px + pw, py + 1, this.border());
-        }
-        int centerX = px + pw / 2;
-        Object trackInfo = DrawUtils.t("Nothing playing", "\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0438\u0433\u0440\u0430\u0435\u0442");
-        long posSec = 0L;
-        long durSec = 0L;
-        float prog = 0.0f;
-        boolean playing = false;
+        int outlineColor = sm ? -19712 : this.accent();
+        String badge = sm ? DrawUtils.t("Speaker", "Колонка") : DrawUtils.t("Local", "MP3");
+        int badgeColor = outlineColor;
+        int barH = 68;
+
+        this.drawModernCard(ctx, barX, barY, barW, barH, this.bgDark(), outlineColor);
+
+        String trackInfo = this.localPlayer.getCurrentTrackName();
+        long durMicros = this.localPlayer.getDuration();
+        long posMicros = this.localPlayer.getCurrentPosition();
+        long posSec = posMicros / 1000000L;
+        long durSec = durMicros / 1000000L;
+        float prog = durMicros > 0L ? (float)Math.max(0.0, Math.min(1.0, (double)posMicros / (double)durMicros)) : 0.0f;
+        boolean playing = this.localPlayer.isPlaying();
         float vol = this.localPlayer.getVolume();
-        if (localActive && !fromGsmtc) {
-            trackInfo = this.localPlayer.getCurrentTrackName();
-            long durMicros = this.localPlayer.getDuration();
-            long posMicros = this.localPlayer.getCurrentPosition();
-            posSec = posMicros / 1000000L;
-            durSec = durMicros / 1000000L;
-            prog = durMicros > 0L ? (float)Math.max(0.0, Math.min(1.0, (double)posMicros / (double)durMicros)) : 0.0f;
-            playing = this.localPlayer.isPlaying();
-            vol = this.localPlayer.getVolume();
-        } else if (fromGsmtc) {
-            String t = this.gsmtc.getTitle();
-            String a = this.gsmtc.getArtist();
-            trackInfo = a.isEmpty() ? t : t + " - " + a;
-            posSec = (long)this.gsmtc.getPosition();
-            durSec = (long)this.gsmtc.getDuration();
-            prog = durSec > 0L ? (float)Math.max(0.0, Math.min(1.0, (double)posSec / (double)durSec)) : 0.0f;
-            playing = this.gsmtc.isPlaying();
+
+        int coverX = barX + 6;
+        int coverY = barY + 6;
+        int coverSize = 34;
+        ctx.fill(coverX, coverY, coverX + coverSize, coverY + coverSize, this.bgButton());
+        ctx.centeredText(this.font, Component.literal("♪"), coverX + coverSize / 2, coverY + coverSize / 2 - 4, this.accent());
+
+        int badgeW = this.font.width(badge) + 8;
+        this.drawModernButton(ctx, mouseX, mouseY, barX + 46, barY + 6, badgeW, 12, badge, true, badgeColor, badgeColor);
+
+        int maxTitleW = barW - 46 - badgeW - 16;
+        String displayTitle = trackInfo;
+        if (this.font.width(displayTitle) > maxTitleW) {
+            while (displayTitle.length() > 3 && this.font.width(displayTitle + "..") > maxTitleW) {
+                displayTitle = displayTitle.substring(0, displayTitle.length() - 1);
+            }
+            displayTitle = displayTitle + "..";
         }
-        int infoLeftX = px + 4;
-        if (fromGsmtc && this.gsmtc.hasCover()) {
-            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, px + 5, py + 17, 18, 18, 0.0f, 1.0f, 0.0f, 1.0f);
-            infoLeftX += 22;
-        }
-        if (!badge.isEmpty()) {
-            DrawUtils.drawText(ctx, this.font, "[" + badge + "]", infoLeftX, py + 4, badgeColor, true);
-        }
-        if (fromGsmtc) {
-            boolean hoverDl = this.isInside(mouseX, mouseY, px + pw - 52, py + 3, 48, 11);
-            ctx.fill(px + pw - 52, py + 3, px + pw - 4, py + 14, hoverDl ? this.bgHover() : this.bgDark());
-            DrawUtils.drawText(ctx, this.font, "v " + DrawUtils.t("Save", "\u0412 \u043f\u043b\u0435\u0435\u0440"), px + pw - 48, py + 4, hoverDl ? this.accent() : this.textSecondary(), false);
-        }
-        int n = maxLen = !badge.isEmpty() ? 30 : 38;
-        if (((String)trackInfo).length() > maxLen) {
-            trackInfo = ((String)trackInfo).substring(0, maxLen - 2) + "..";
-        }
-        int titleOffset = !badge.isEmpty() ? 15 : 0;
-        ctx.centeredText(this.font, Component.literal((String)trackInfo), centerX + titleOffset, py + 4, this.textPrimary());
-        int barX = px + 50;
-        int barY = py + 16;
-        int barW = pw - 100;
-        ctx.fill(barX, barY, barX + barW, barY + 4, -11184811);
-        if (prog > 0.0f) {
-            int fillW = (int)(prog * (float)barW);
-            int barColor = isSpotify ? -14829228 : (isYandex ? -13312 : this.accent());
-            ctx.fill(barX, barY, barX + fillW, barY + 4, barColor);
-        }
-        DrawUtils.drawText(ctx, this.font, this.formatTime(posSec) + " / " + this.formatTime(durSec), barX + barW + 4, barY - 2, this.textSecondary(), false);
-        int btnY = py + 32;
+        DrawUtils.drawText(ctx, this.font, displayTitle, barX + 46 + badgeW + 6, barY + 8, this.textPrimary(), true);
+
+        int sbX = barX + 46;
+        int sbW = barW - 126;
+        int sbY = barY + 28;
+        boolean hoverSeek = this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10);
+        this.drawModernProgressBar(ctx, sbX, sbY, sbW, 3, prog, hoverSeek, outlineColor);
+
+        String timerText = this.formatTime(posSec) + " / " + this.formatTime(durSec);
+        DrawUtils.drawText(ctx, this.font, timerText, sbX + sbW + 6, sbY - 2, this.textSecondary(), false);
+
+        int ctrlCenter = barX + barW / 2;
+        int btnY = barY + 46;
         int btnS = 16;
-        int gap = 4;
-        int btnW_10 = this.font.width("-10") + 8;
-        int totalW = btnS * 3 + btnW_10 * 2 + gap * 4;
-        int btnX = centerX - totalW / 2;
+        int btnW_10 = 22;
+        int btnPrevX = ctrlCenter - 61;
+        int btnRewX = ctrlCenter - 39;
+        int playCx = ctrlCenter;
+        int btnFwdX = ctrlCenter + 17;
+        int btnNextX = ctrlCenter + 45;
+
+        this.drawModernButton(ctx, mouseX, mouseY, btnPrevX, btnY, btnS, btnS, "⏮", false, this.accent(), this.textSecondary());
+        this.drawModernButton(ctx, mouseX, mouseY, btnRewX, btnY, btnW_10, btnS, "-10", false, this.accent(), this.textSecondary());
+
+        this.drawModernButton(ctx, mouseX, mouseY, playCx - 10, btnY - 2, 20, 20, playing ? "⏸" : "▶", playing, outlineColor, outlineColor);
+
+        this.drawModernButton(ctx, mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS, "+10", false, this.accent(), this.textSecondary());
+        this.drawModernButton(ctx, mouseX, mouseY, btnNextX, btnY, btnS, btnS, "⏭", false, this.accent(), this.textSecondary());
+
         if (sm) {
-            btnX += 10;
-        }
-        this.drawButton(ctx, mouseX, mouseY, btnX, btnY, btnS, btnS, "|<", 50);
-        this.drawButton(ctx, mouseX, mouseY, btnX + btnS + gap, btnY, btnW_10, btnS, "-10", 51);
-        int playCol = isSpotify ? -14829228 : (isYandex ? -13312 : this.accent());
-        this.drawButton(ctx, mouseX, mouseY, btnX + btnS + gap + btnW_10 + gap, btnY, btnS, btnS, playing ? "||" : ">", 52, playCol);
-        this.drawButton(ctx, mouseX, mouseY, btnX + btnS * 2 + gap * 2 + btnW_10 + gap, btnY, btnW_10, btnS, "+10", 53);
-        this.drawButton(ctx, mouseX, mouseY, btnX + btnS * 2 + gap * 2 + btnW_10 * 2 + gap * 2, btnY, btnS, btnS, ">|", 54);
-        if (sm) {
-            int rangeX = px + 5;
-            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Range", "\u0420\u0430\u0434\u0438\u0443\u0441"), rangeX, btnY - 5, this.textSecondary(), false);
-            ctx.fill(rangeX, btnY + 5, rangeX + 45, btnY + 9, this.bgDark());
+            int rangeX = barX + 6;
+            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Range", "Радиус"), rangeX, btnY - 1, this.textSecondary(), false);
             int maxRange = 64;
             int minRange = 8;
             float rProgress = (float)(ModConfig.getInstance().speakerRange - minRange) / (float)(maxRange - minRange);
-            ctx.fill(rangeX, btnY + 5, rangeX + (int)(rProgress * 45.0f), btnY + 9, this.accent());
-            int volX = px + pw - 60;
-            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX, btnY - 5, this.textSecondary(), false);
-            ctx.fill(volX, btnY + 5, volX + 45, btnY + 9, this.bgDark());
-            ctx.fill(volX, btnY + 5, volX + (int)(vol * 45.0f), btnY + 9, this.accent());
-        } else {
-            int volX = px + pw - 70;
-            DrawUtils.drawText(ctx, this.font, DrawUtils.t("Vol", "\u0417\u0432\u043a"), volX - 10, btnY + 3, this.textSecondary(), false);
-            ctx.fill(volX, btnY + 5, volX + 55, btnY + 9, this.bgDark());
-            ctx.fill(volX, btnY + 5, volX + (int)(vol * 55.0f), btnY + 9, this.accent());
+            this.drawModernProgressBar(ctx, rangeX, btnY + 8, 34, 3, rProgress, false, this.accent());
         }
+
+        int volIconX = barX + barW - 54;
+        int volBarX = barX + barW - 44;
+        boolean hoverVol = this.isInside(mouseX, mouseY, volBarX - 2, btnY + 5, 44, 8);
+        DrawUtils.drawText(ctx, this.font, vol <= 0.001f ? "🔇" : "🔊", volIconX, btnY + 4, this.textSecondary(), false);
+        this.drawModernProgressBar(ctx, volBarX, btnY + 7, 40, 3, vol, hoverVol, this.accent());
     }
 
     private void drawTab(GuiGraphicsExtractor ctx, int mouseX, int mouseY, int x, int y, String label, int idx, String tooltip) {

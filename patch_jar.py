@@ -31,3 +31,4 @@ def patch_jar(jar_path):
 if __name__ == '__main__':
     target = sys.argv[1] if len(sys.argv) > 1 else 'build/libs/mp3player-26.3.jar'
     patch_jar(target)
+
