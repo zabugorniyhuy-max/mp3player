@@ -56,6 +56,7 @@ public class GsmtcManager {
     private static final long TOAST_DURATION_MS = 6000L;
     private volatile boolean hudEnabled = true;
     private volatile boolean toastEnabled = false;
+    private volatile boolean isShutdown = false;
     private final ScheduledExecutorService pollExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "Gsmtc-PollThread");
         t.setDaemon(true);
@@ -83,17 +84,27 @@ public class GsmtcManager {
     }
 
     public boolean isAvailable() {
-        return this.bridge != null;
+        return !this.isShutdown && this.bridge != null;
+    }
+
+    public boolean isShutdown() {
+        return this.isShutdown;
     }
 
     private void pollNative() {
-        if (this.bridge == null) {
+        if (this.isShutdown || this.bridge == null) {
             return;
         }
         try {
             boolean statusChanged;
             boolean ht = this.bridge.gsmtc_has_track() == 1;
+            if (this.isShutdown) {
+                return;
+            }
             int newStatus = this.bridge.gsmtc_get_status();
+            if (this.isShutdown) {
+                return;
+            }
             boolean bl = statusChanged = newStatus != this.status;
             if (statusChanged && newStatus == 1) {
                 try {
@@ -156,7 +167,7 @@ public class GsmtcManager {
     }
 
     public void tick() {
-        if (!this.hasTrack) {
+        if (this.isShutdown || !this.hasTrack) {
             return;
         }
         this.position = this.getPosition();
@@ -207,31 +218,41 @@ public class GsmtcManager {
     }
 
     private void applyCoverBytes(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) {
+        if (this.isShutdown || bytes == null || bytes.length == 0) {
             return;
         }
         this.currentCoverBytes = bytes;
         NanoVGEngine.getInstance().updateGsmtcCoverImage(bytes);
-        Minecraft.getInstance().execute(() -> {
-            try {
-                NativeImage image = NativeImage.read((InputStream)new ByteArrayInputStream(bytes));
-                if (image != null) {
-                    if (this.coverTexture != null) {
-                        this.coverTexture.close();
+        try {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null && !this.isShutdown) {
+                client.execute(() -> {
+                    if (this.isShutdown) {
+                        return;
                     }
-                    this.coverTexture = new DynamicTexture(() -> "gsmtc_album_art", image);
-                    this.coverTexture.upload();
-                    Minecraft.getInstance().getTextureManager().register(COVER_TEXTURE_ID, (AbstractTexture)this.coverTexture);
-                }
+                    try {
+                        NativeImage image = NativeImage.read((InputStream)new ByteArrayInputStream(bytes));
+                        if (image != null) {
+                            if (this.coverTexture != null) {
+                                this.coverTexture.close();
+                            }
+                            this.coverTexture = new DynamicTexture(() -> "gsmtc_album_art", image);
+                            this.coverTexture.upload();
+                            if (client.getTextureManager() != null) {
+                                client.getTextureManager().register(COVER_TEXTURE_ID, (AbstractTexture)this.coverTexture);
+                            }
+                        }
+                    }
+                    catch (Throwable throwable) {
+                        // empty catch block
+                    }
+                });
             }
-            catch (Throwable throwable) {
-                // empty catch block
-            }
-        });
+        } catch (Throwable ignored) {}
     }
 
     private void updateThumbnail() {
-        if (this.bridge == null) {
+        if (this.isShutdown || this.bridge == null) {
             return;
         }
         int size = this.bridge.gsmtc_get_thumbnail_size();
@@ -628,6 +649,34 @@ public class GsmtcManager {
                 // empty catch block
             }
         }
+    }
+
+    public synchronized void shutdown() {
+        if (this.isShutdown) {
+            return;
+        }
+        this.isShutdown = true;
+        com.mp3player.MP3PlayerClient.LOGGER.info("[GSMTC] Shutting down GSMTC background poll and bridge...");
+        try {
+            this.pollExecutor.shutdownNow();
+            this.pollExecutor.awaitTermination(300, TimeUnit.MILLISECONDS);
+        } catch (Throwable ignored) {}
+
+        if (this.bridge != null) {
+            try {
+                this.bridge.browser_close();
+            } catch (Throwable ignored) {}
+            try {
+                this.bridge.gsmtc_cleanup();
+            } catch (Throwable ignored) {}
+        }
+
+        try {
+            if (this.coverTexture != null) {
+                this.coverTexture.close();
+                this.coverTexture = null;
+            }
+        } catch (Throwable ignored) {}
     }
 
     static {

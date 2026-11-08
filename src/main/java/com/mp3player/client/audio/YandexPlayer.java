@@ -202,5 +202,12 @@ public class YandexPlayer {
         }
         return "\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0438\u0433\u0440\u0430\u0435\u0442";
     }
+
+    public void shutdown() {
+        this.stop();
+        try {
+            this.executor.shutdownNow();
+        } catch (Throwable ignored) {}
+    }
 }
 

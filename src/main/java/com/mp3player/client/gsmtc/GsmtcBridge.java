@@ -59,6 +59,8 @@ extends Library {
 
     public int gsmtc_set_volume(float var1);
 
+    public void gsmtc_cleanup();
+
     public void gsmtc_shutdown();
 
     public void browser_set_parent_hwnd(long var1);

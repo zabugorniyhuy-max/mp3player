@@ -359,6 +359,29 @@ public class NanoVGEngine {
         return this.initialized && this.vg != 0L;
     }
 
+    public void destroy() {
+        if (!RenderSystem.isOnRenderThread()) {
+            return;
+        }
+        if (this.vg != 0L) {
+            try {
+                if (this.gsmtcCoverImage > 0) {
+                    NanoVG.nvgDeleteImage(this.vg, this.gsmtcCoverImage);
+                    this.gsmtcCoverImage = 0;
+                }
+                if (this.localCoverImage > 0) {
+                    NanoVG.nvgDeleteImage(this.vg, this.localCoverImage);
+                    this.localCoverImage = 0;
+                }
+                NanoVGGL3.nvgDelete(this.vg);
+            } catch (Throwable t) {
+                // ignore
+            }
+            this.vg = 0L;
+            this.initialized = false;
+        }
+    }
+
     private int getTargetFramebuffer() {
         return this.savedDrawFbo;
     }

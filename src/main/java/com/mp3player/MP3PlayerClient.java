@@ -51,10 +51,12 @@ import com.mp3player.client.audio.AudioConverter;
 import com.mp3player.client.audio.GlobalAudioTracker;
 import com.mp3player.client.audio.JukeboxAudioPlayer;
 import com.mp3player.client.audio.MusicPlayer;
+import com.mp3player.client.audio.YandexPlayer;
 import com.mp3player.client.config.ModConfig;
 import com.mp3player.client.gsmtc.GsmtcHudOverlay;
 import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.ShareRequestScreen;
+import com.mp3player.client.gui.nanovg.NanoVGEngine;
 import com.mp3player.client.network.FileReceiverManager;
 import com.mp3player.client.network.FileSenderManager;
 import com.mp3player.network.FileTransferChunkPayload;
@@ -75,6 +77,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -334,6 +337,51 @@ implements ClientModInitializer {
             activeJukeboxes.clear();
             GlobalAudioTracker.getInstance().stopAll();
         });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            LOGGER.info("[MP3Player] Client stopping, releasing audio, GUI and native resources...");
+            try {
+                MusicPlayer.getInstance().stop();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error stopping MusicPlayer: {}", t.getMessage());
+            }
+            try {
+                YandexPlayer.getInstance().shutdown();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error stopping YandexPlayer: {}", t.getMessage());
+            }
+            try {
+                for (JukeboxAudioPlayer player : activeJukeboxes.values()) {
+                    player.stop();
+                }
+                activeJukeboxes.clear();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error stopping JukeboxAudioPlayer: {}", t.getMessage());
+            }
+            try {
+                GlobalAudioTracker.getInstance().stopAll();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error stopping GlobalAudioTracker: {}", t.getMessage());
+            }
+            try {
+                GsmtcManager.getInstance().shutdown();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error shutting down GsmtcManager: {}", t.getMessage());
+            }
+            try {
+                NanoVGEngine.getInstance().destroy();
+            } catch (Throwable t) {
+                LOGGER.warn("[MP3Player] Error destroying NanoVGEngine: {}", t.getMessage());
+            }
+            LOGGER.info("[MP3Player] Cleanup completed successfully.");
+        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                GsmtcManager.getInstance().shutdown();
+            } catch (Throwable ignored) {}
+            try {
+                MusicPlayer.getInstance().stop();
+            } catch (Throwable ignored) {}
+        }, "MP3Player-ShutdownHook"));
         GsmtcHudOverlay.register();
         ModSounds.register();
         KeyInputHandler.register();
