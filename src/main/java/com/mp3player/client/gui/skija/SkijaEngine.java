@@ -170,22 +170,25 @@ public class SkijaEngine {
         return this.darkTheme;
     }
 
-    public synchronized void beginFrame(int width, int height) {
+    public synchronized void beginFrame(int width, int height, float scale) {
         if (!this.available || width <= 0 || height <= 0) {
             return;
         }
 
         this.scissorSaveCount = 0;
+        float actualScale = Math.max(1.0f, scale);
+        int physicalWidth = Math.max(1, (int) Math.ceil((float) width * actualScale));
+        int physicalHeight = Math.max(1, (int) Math.ceil((float) height * actualScale));
 
-        if (this.surface == null || this.bufferWidth != width || this.bufferHeight != height) {
+        if (this.surface == null || this.bufferWidth != physicalWidth || this.bufferHeight != physicalHeight) {
             destroySurface();
-            this.bufferWidth = width;
-            this.bufferHeight = height;
+            this.bufferWidth = physicalWidth;
+            this.bufferHeight = physicalHeight;
 
             try {
-                this.nativeImage = new NativeImage(NativeImage.Format.RGBA, width, height, false);
-                ImageInfo info = new ImageInfo(width, height, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
-                this.surface = Surface.wrapPixels(info, this.nativeImage.getPointer(), (long) width * 4);
+                this.nativeImage = new NativeImage(NativeImage.Format.RGBA, physicalWidth, physicalHeight, false);
+                ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+                this.surface = Surface.wrapPixels(info, this.nativeImage.getPointer(), (long) physicalWidth * 4);
                 this.uiCanvas = this.surface.getCanvas();
 
                 this.dynamicTexture = new DynamicTexture(() -> "skija_ui", this.nativeImage);
@@ -201,7 +204,18 @@ public class SkijaEngine {
         this.canvas = this.uiCanvas;
         if (this.canvas != null) {
             this.canvas.clear(0x00000000);
+            this.canvas.resetMatrix();
+            this.canvas.scale(actualScale, actualScale);
+            this.canvas.save();
         }
+    }
+
+    public synchronized void beginFrame(int width, int height) {
+        float scale = 1.0f;
+        try {
+            scale = (float) Minecraft.getInstance().getWindow().getGuiScale();
+        } catch (Throwable ignored) {}
+        beginFrame(width, height, scale);
     }
 
     public synchronized void endFrame() {
@@ -213,6 +227,7 @@ public class SkijaEngine {
                 this.uiCanvas.restore();
                 this.scissorSaveCount--;
             }
+            this.uiCanvas.restore();
             this.dynamicTexture.upload();
         } catch (Throwable t) {
             MP3PlayerClient.LOGGER.error("[Skija] Error ending frame: {}", t.getMessage());
@@ -226,22 +241,25 @@ public class SkijaEngine {
         ctx.blit(SKIJA_TEXTURE_ID, screenX, screenY, screenX + width, screenY + height, 0.0f, 1.0f, 0.0f, 1.0f);
     }
 
-    public synchronized void beginHudFrame(int width, int height) {
+    public synchronized void beginHudFrame(int width, int height, float scale) {
         if (!this.available || width <= 0 || height <= 0) {
             return;
         }
 
         this.scissorSaveCount = 0;
+        float actualScale = Math.max(1.0f, scale);
+        int physicalWidth = Math.max(1, (int) Math.ceil((float) width * actualScale));
+        int physicalHeight = Math.max(1, (int) Math.ceil((float) height * actualScale));
 
-        if (this.hudSurface == null || this.hudBufferWidth != width || this.hudBufferHeight != height) {
+        if (this.hudSurface == null || this.hudBufferWidth != physicalWidth || this.hudBufferHeight != physicalHeight) {
             destroyHudSurface();
-            this.hudBufferWidth = width;
-            this.hudBufferHeight = height;
+            this.hudBufferWidth = physicalWidth;
+            this.hudBufferHeight = physicalHeight;
 
             try {
-                this.hudNativeImage = new NativeImage(NativeImage.Format.RGBA, width, height, false);
-                ImageInfo info = new ImageInfo(width, height, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
-                this.hudSurface = Surface.wrapPixels(info, this.hudNativeImage.getPointer(), (long) width * 4);
+                this.hudNativeImage = new NativeImage(NativeImage.Format.RGBA, physicalWidth, physicalHeight, false);
+                ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+                this.hudSurface = Surface.wrapPixels(info, this.hudNativeImage.getPointer(), (long) physicalWidth * 4);
                 this.hudCanvas = this.hudSurface.getCanvas();
 
                 this.hudDynamicTexture = new DynamicTexture(() -> "skija_hud", this.hudNativeImage);
@@ -257,7 +275,18 @@ public class SkijaEngine {
         this.canvas = this.hudCanvas;
         if (this.canvas != null) {
             this.canvas.clear(0x00000000);
+            this.canvas.resetMatrix();
+            this.canvas.scale(actualScale, actualScale);
+            this.canvas.save();
         }
+    }
+
+    public synchronized void beginHudFrame(int width, int height) {
+        float scale = 1.0f;
+        try {
+            scale = (float) Minecraft.getInstance().getWindow().getGuiScale();
+        } catch (Throwable ignored) {}
+        beginHudFrame(width, height, scale);
     }
 
     public synchronized void endHudFrame() {
@@ -269,6 +298,7 @@ public class SkijaEngine {
                 this.hudCanvas.restore();
                 this.scissorSaveCount--;
             }
+            this.hudCanvas.restore();
             this.hudDynamicTexture.upload();
         } catch (Throwable t) {
             MP3PlayerClient.LOGGER.error("[Skija] Error ending HUD frame: {}", t.getMessage());
@@ -509,6 +539,8 @@ public class SkijaEngine {
              Font font = new Font(bold ? this.boldTypeface : this.regularTypeface, fontSize)) {
             paint.setColor(color);
             paint.setAntiAlias(true);
+            font.setSubpixel(true);
+            font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
             Rect bounds = font.measureText(text, paint);
             float baselineY = y - (bounds.getTop() + bounds.getBottom()) / 2f;
             float startX;
@@ -577,6 +609,8 @@ public class SkijaEngine {
              Font font = new Font(this.iconTypeface != null ? this.iconTypeface : this.regularTypeface, size)) {
             paint.setColor(color);
             paint.setAntiAlias(true);
+            font.setSubpixel(true);
+            font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
             Rect bounds = font.measureText(glyph, paint);
             float x = cx - (bounds.getLeft() + bounds.getRight()) / 2f;
             float y = cy - (bounds.getTop() + bounds.getBottom()) / 2f;
@@ -888,7 +922,9 @@ public class SkijaEngine {
             try {
                 this.canvas.save();
                 this.canvas.clipRRect(RRect.makeXYWH(x, y, w, h, radius), true);
-                this.canvas.drawImageRect(img, Rect.makeXYWH(x, y, w, h));
+                Rect src = Rect.makeWH(img.getWidth(), img.getHeight());
+                Rect dst = Rect.makeXYWH(x, y, w, h);
+                this.canvas.drawImageRect(img, src, dst, SamplingMode.CATMULL_ROM, null, true);
                 this.canvas.restore();
                 if (imageBytes != this.gsmtcCoverBytes && imageBytes != this.localCoverBytes) {
                     img.close();

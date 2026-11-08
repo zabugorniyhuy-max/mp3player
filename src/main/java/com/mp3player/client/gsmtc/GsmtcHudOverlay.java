@@ -157,9 +157,10 @@ public class GsmtcHudOverlay {
         }
         int bg = isHovered ? 0xE614141E : 0xCC101018;
 
+        float guiScale = (float) Minecraft.getInstance().getWindow().getGuiScale();
         int frameW = pillW + 16;
         int frameH = pillH + 16;
-        skija.beginHudFrame(frameW, frameH);
+        skija.beginHudFrame(frameW, frameH, guiScale);
 
         float px = 8f;
         float py = 6f;

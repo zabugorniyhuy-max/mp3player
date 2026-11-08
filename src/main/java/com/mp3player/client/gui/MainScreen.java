@@ -207,8 +207,9 @@ extends Screen {
 
         SkijaEngine skija = SkijaEngine.getInstance();
         if (skija.isAvailable() && ModConfig.getInstance().useSkija) {
+            float guiScale = (float) this.minecraft.getWindow().getGuiScale();
             skija.setDarkTheme(darkTheme);
-            skija.beginFrame(this.width, this.height);
+            skija.beginFrame(this.width, this.height, guiScale);
             this.renderScreenSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
             skija.endFrame();
             skija.renderToContext(context, 0, 0, this.width, this.height);
