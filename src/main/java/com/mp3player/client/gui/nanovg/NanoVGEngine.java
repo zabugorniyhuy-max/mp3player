@@ -23,8 +23,6 @@ import org.lwjgl.nanovg.NVGColor;
 import org.lwjgl.nanovg.NVGPaint;
 import org.lwjgl.nanovg.NanoVG;
 import org.lwjgl.nanovg.NanoVGGL3;
-import org.lwjgl.opengl.ARBClipControl;
-import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
@@ -142,8 +140,6 @@ public class NanoVGEngine {
     private int savedUnpackSkipPixels = 0;
     private int savedUnpackSkipRows = 0;
     private int savedUbo0 = 0;
-    private int savedClipOrigin = 0;
-    private int savedClipDepthMode = 0;
     private boolean loggedFirstText = false;
 
     public void setDarkTheme(boolean dark) {
@@ -242,17 +238,6 @@ public class NanoVGEngine {
         }
         try {
             com.mp3player.MP3PlayerClient.LOGGER.info("[NanoVG] Initializing NanoVG renderer...");
-            boolean hasClipControl = false;
-            int initClipOrigin = 0;
-            int initClipDepth = 0;
-            try {
-                hasClipControl = GL.getCapabilities().GL_ARB_clip_control;
-                if (hasClipControl) {
-                    initClipOrigin = GL11.glGetInteger(ARBClipControl.GL_CLIP_ORIGIN);
-                    initClipDepth = GL11.glGetInteger(ARBClipControl.GL_CLIP_DEPTH_MODE);
-                    ARBClipControl.glClipControl(ARBClipControl.GL_LOWER_LEFT, ARBClipControl.GL_NEGATIVE_ONE_TO_ONE);
-                }
-            } catch (Throwable ignored) {}
 
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
             GL33.glBindSampler(0, 0);
@@ -261,17 +246,9 @@ public class NanoVGEngine {
             GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0);
             byte[] bytes;
             InputStream is2;
-            try {
-                this.vg = NanoVGGL3.nvgCreate(1);
-                if (this.vg == 0L) {
-                    this.vg = NanoVGGL3.nvgCreate(0);
-                }
-            } finally {
-                if (hasClipControl && initClipOrigin != 0 && initClipDepth != 0) {
-                    try {
-                        ARBClipControl.glClipControl(initClipOrigin, initClipDepth);
-                    } catch (Throwable ignored) {}
-                }
+            this.vg = NanoVGGL3.nvgCreate(1);
+            if (this.vg == 0L) {
+                this.vg = NanoVGGL3.nvgCreate(0);
             }
             if (this.vg == 0L) {
                 com.mp3player.MP3PlayerClient.LOGGER.error("[NanoVG] nvgCreate failed! Returned 0L");
@@ -481,15 +458,6 @@ public class NanoVGEngine {
         GL30.glGetIntegeri_v(GL31.GL_UNIFORM_BUFFER_BINDING, 0, this.intBuf);
         this.savedUbo0 = this.intBuf.get(0);
 
-        // Save and switch clip control for NanoVG
-        try {
-            if (GL.getCapabilities().GL_ARB_clip_control) {
-                this.savedClipOrigin = GL11.glGetInteger(ARBClipControl.GL_CLIP_ORIGIN);
-                this.savedClipDepthMode = GL11.glGetInteger(ARBClipControl.GL_CLIP_DEPTH_MODE);
-                ARBClipControl.glClipControl(ARBClipControl.GL_LOWER_LEFT, ARBClipControl.GL_NEGATIVE_ONE_TO_ONE);
-            }
-        } catch (Throwable ignored) {}
-
         this.activeTargetFbo = this.getTargetFramebuffer();
         if (this.activeTargetFbo != 0 && this.activeTargetFbo != this.savedDrawFbo) {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.activeTargetFbo);
@@ -497,7 +465,7 @@ public class NanoVGEngine {
 
         if (!this.loggedFirstFrame) {
             this.loggedFirstFrame = true;
-            com.mp3player.MP3PlayerClient.LOGGER.info("[NanoVG] beginFrame: width=" + width + ", height=" + height + ", scale=" + pixelRatio + ", savedFBO=" + this.savedDrawFbo + ", activeFBO=" + this.activeTargetFbo + ", savedSampler0=" + this.savedSamplers[0] + ", savedUnpackBuf=" + this.savedPixelUnpackBuffer + ", clipOrigin=" + this.savedClipOrigin + ", clipDepth=" + this.savedClipDepthMode);
+            com.mp3player.MP3PlayerClient.LOGGER.info("[NanoVG] beginFrame: width=" + width + ", height=" + height + ", scale=" + pixelRatio + ", savedFBO=" + this.savedDrawFbo + ", activeFBO=" + this.activeTargetFbo + ", savedSampler0=" + this.savedSamplers[0] + ", savedUnpackBuf=" + this.savedPixelUnpackBuffer);
         }
         NanoVG.nvgBeginFrame(this.vg, width, height, pixelRatio);
     }
@@ -507,13 +475,6 @@ public class NanoVGEngine {
             return;
         }
         NanoVG.nvgEndFrame(this.vg);
-
-        // Restore clip control
-        try {
-            if (this.savedClipOrigin != 0 && this.savedClipDepthMode != 0) {
-                ARBClipControl.glClipControl(this.savedClipOrigin, this.savedClipDepthMode);
-            }
-        } catch (Throwable ignored) {}
 
         // Restore UBO index 0
         if (this.savedUbo0 != 0) {

@@ -68,6 +68,12 @@ jar {
         exclude "org/lwjgl/PointerBuffer*"
         exclude "org/lwjgl/CLongBuffer*"
     }
+    doLast {
+        new ProcessBuilder("python", "patch_jar.py", archiveFile.get().asFile.absolutePath)
+            .inheritIO()
+            .start()
+            .waitFor()
+    }
 }
 
 test {

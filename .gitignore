@@ -4,6 +4,7 @@ bin/
 *.log
 *.class
 *.py
+!patch_jar.py
 *.txt
 *.java.bak
 OriginalMainScreen*
