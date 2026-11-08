@@ -32,6 +32,7 @@ public class ModConfig {
     public int speakerRange = 32;
     public int currentTab = 0;
     public boolean muteGlobal = false;
+    public boolean useSkija = true;
     public boolean useNanoVG = true;
     public List<String> favorites = new ArrayList<String>();
 

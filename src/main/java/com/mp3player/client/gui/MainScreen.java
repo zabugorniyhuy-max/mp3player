@@ -24,7 +24,7 @@ import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.DrawUtils;
 import com.mp3player.client.gui.MusicDiscScreen;
 import com.mp3player.client.gui.ShareScreen;
-import com.mp3player.client.gui.nanovg.NanoVGEngine;
+import com.mp3player.client.gui.skija.SkijaEngine;
 import com.mp3player.client.network.FileReceiverManager;
 import com.mp3player.client.network.FileSenderManager;
 import java.io.File;
@@ -79,7 +79,7 @@ extends Screen {
     public MainScreen() {
         super((Component)Component.literal((String)"Music Player"));
         darkTheme = ModConfig.getInstance().darkTheme;
-        NanoVGEngine.getInstance().setDarkTheme(darkTheme);
+        SkijaEngine.getInstance().setDarkTheme(darkTheme);
         this.currentTab = ModConfig.getInstance().currentTab;
         if (this.currentTab < 0 || this.currentTab > 3) {
             this.currentTab = 0;
@@ -205,6 +205,17 @@ extends Screen {
         int panelY = (int)((float)(this.height + 20) + (float)(targetY - this.height - 20) * eased);
         int panelX = centerX - panelW / 2;
 
+        SkijaEngine skija = SkijaEngine.getInstance();
+        if (skija.isAvailable() && ModConfig.getInstance().useSkija) {
+            skija.setDarkTheme(darkTheme);
+            skija.beginFrame(this.width, this.height);
+            this.renderScreenSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
+            skija.endFrame();
+            skija.renderToContext(context, 0, 0, this.width, this.height);
+            super.extractRenderState(context, mouseX, mouseY, delta);
+            return;
+        }
+
         int tab0W = 96;
         int tab1W = 86;
         int tab2W = 80;
@@ -317,7 +328,7 @@ extends Screen {
         return -1;
     }
 
-    private void renderScreenNanoVG(NanoVGEngine nvg, int mouseX, int mouseY, int panelX, int panelY, int panelW, int panelH) {
+    private void renderScreenSkija(SkijaEngine skija, int mouseX, int mouseY, int panelX, int panelY, int panelW, int panelH) {
         boolean sm = ModConfig.getInstance().speakerMode;
         boolean mg = ModConfig.getInstance().muteGlobal;
         int centerX = panelX + panelW / 2;
@@ -333,53 +344,53 @@ extends Screen {
         boolean hoverTab1 = this.isInside(mouseX, mouseY, tab1X, panelY - 22, tab1W, 22);
         boolean hoverTab2 = this.isInside(mouseX, mouseY, tab2X, panelY - 22, tab2W, 22);
         boolean hoverTab3 = this.isInside(mouseX, mouseY, tab3X, panelY - 22, tab3W, 22);
-        nvg.drawTab(tab0X, panelY - 22, tab0W, 22.0f, "Webs / Apps", this.currentTab == 0, hoverTab0, this.accent());
-        nvg.drawTab(tab1X, panelY - 22, tab1W, 22.0f, DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440"), this.currentTab == 1, hoverTab1, this.accent());
-        nvg.drawTab(tab2X, panelY - 22, tab2W, 22.0f, DrawUtils.t("Favorites", "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"), this.currentTab == 2, hoverTab2, this.accent());
-        nvg.drawTabBase(tab3X, panelY - 22, tab3W, 22.0f, this.currentTab == 3, hoverTab3, this.accent());
-        nvg.drawGearIcon((float)tab3X + (float)tab3W * 0.5f, (float)panelY - 11.0f, 6.0f, this.currentTab == 3 ? this.accent() : (hoverTab3 ? (darkTheme ? -1 : -15788246) : this.textSecondary()));
-        nvg.drawDropShadow(panelX, panelY, panelW, panelH, 12.0f, 24.0f, 4.0f, 0x66000000);
-        nvg.drawRoundedRect(panelX, panelY, panelW, panelH, 12.0f, this.bgPanel());
-        nvg.drawRoundedRectOutline(panelX, panelY, panelW, panelH, 12.0f, 1.0f, this.border());
-        nvg.drawRoundedRect(panelX + 12, panelY, panelW - 24, 2.0f, 1.0f, this.accent());
+        skija.drawTab(tab0X, panelY - 22, tab0W, 22.0f, "Webs / Apps", this.currentTab == 0, hoverTab0, this.accent());
+        skija.drawTab(tab1X, panelY - 22, tab1W, 22.0f, DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440"), this.currentTab == 1, hoverTab1, this.accent());
+        skija.drawTab(tab2X, panelY - 22, tab2W, 22.0f, DrawUtils.t("Favorites", "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"), this.currentTab == 2, hoverTab2, this.accent());
+        skija.drawTabBase(tab3X, panelY - 22, tab3W, 22.0f, this.currentTab == 3, hoverTab3, this.accent());
+        skija.drawGearIcon((float)tab3X + (float)tab3W * 0.5f, (float)panelY - 11.0f, 6.0f, this.currentTab == 3 ? this.accent() : (hoverTab3 ? (darkTheme ? -1 : -15788246) : this.textSecondary()));
+        skija.drawDropShadow(panelX, panelY, panelW, panelH, 12.0f, 24.0f, 4.0f, 0x66000000);
+        skija.drawRoundedRect(panelX, panelY, panelW, panelH, 12.0f, this.bgPanel());
+        skija.drawRoundedRectOutline(panelX, panelY, panelW, panelH, 12.0f, 1.0f, this.border());
+        skija.drawRoundedRect(panelX + 12, panelY, panelW - 24, 2.0f, 1.0f, this.accent());
         boolean hoverTheme = this.isInside(mouseX, mouseY, panelX + 8, panelY + 6, 22, 18);
-        nvg.drawButtonBase(panelX + 8, panelY + 6, 22.0f, 18.0f, hoverTheme, this.pressedButtons.contains(200), this.accent());
-        nvg.drawMoonSunIcon(panelX + 19, panelY + 15, 5.0f, darkTheme, hoverTheme ? this.accent() : this.textSecondary());
+        skija.drawButtonBase(panelX + 8, panelY + 6, 22.0f, 18.0f, hoverTheme, this.pressedButtons.contains(200), this.accent());
+        skija.drawMoonSunIcon(panelX + 19, panelY + 15, 5.0f, darkTheme, hoverTheme ? this.accent() : this.textSecondary());
         boolean hoverLang = this.isInside(mouseX, mouseY, panelX + 34, panelY + 6, 26, 18);
-        nvg.drawButton(panelX + 34, panelY + 6, 26.0f, 18.0f, ModConfig.getInstance().isEnglish ? "EN" : "RU", hoverLang, this.pressedButtons.contains(204), this.accent(), this.textSecondary());
+        skija.drawButton(panelX + 34, panelY + 6, 26.0f, 18.0f, ModConfig.getInstance().isEnglish ? "EN" : "RU", hoverLang, this.pressedButtons.contains(204), this.accent(), this.textSecondary());
         String title = this.currentTab == 0 ? "Webs / Apps" : (this.currentTab == 1 ? DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440") : (this.currentTab == 2 ? DrawUtils.t("Favorites", "\u041b\u044e\u0431\u0438\u043c\u044b\u0435 \u043f\u0435\u0441\u043d\u0438") : DrawUtils.t("Settings & Help", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0438 \u0421\u043f\u0440\u0430\u0432\u043a\u0430")));
-        nvg.drawText(title, panelX + 66, panelY + 15, 12.0f, this.accent(), true, 17);
+        skija.drawText(title, panelX + 66, panelY + 15, 12.0f, this.accent(), true, 17);
         boolean hoverMute = this.isInside(mouseX, mouseY, panelX + panelW - 90, panelY + 6, 22, 18);
-        nvg.drawButtonBase(panelX + panelW - 90, panelY + 6, 22.0f, 18.0f, hoverMute, this.pressedButtons.contains(203), mg ? -43691 : this.accent());
-        nvg.drawSpeakerIcon(panelX + panelW - 79, panelY + 15, 9.0f, mg, mg ? -43691 : (hoverMute ? this.accent() : this.textSecondary()));
+        skija.drawButtonBase(panelX + panelW - 90, panelY + 6, 22.0f, 18.0f, hoverMute, this.pressedButtons.contains(203), mg ? -43691 : this.accent());
+        skija.drawSpeakerIcon(panelX + panelW - 79, panelY + 15, 9.0f, mg, mg ? -43691 : (hoverMute ? this.accent() : this.textSecondary()));
         int speakerCol = sm ? -19712 : this.textSecondary();
         boolean hoverSpeaker = this.isInside(mouseX, mouseY, panelX + panelW - 64, panelY + 6, 56, 18);
-        nvg.drawButton(panelX + panelW - 64, panelY + 6, 56.0f, 18.0f, DrawUtils.t("Speaker", "\u041a\u043e\u043b\u043e\u043d\u043a\u0430"), hoverSpeaker, this.pressedButtons.contains(202), -19712, speakerCol);
+        skija.drawButton(panelX + panelW - 64, panelY + 6, 56.0f, 18.0f, DrawUtils.t("Speaker", "\u041a\u043e\u043b\u043e\u043d\u043a\u0430"), hoverSpeaker, this.pressedButtons.contains(202), -19712, speakerCol);
         if (sm) {
-            nvg.drawRoundedRect(panelX + panelW - 60, panelY + 22, 48.0f, 2.0f, 1.0f, -19712);
+            skija.drawRoundedRect(panelX + panelW - 60, panelY + 22, 48.0f, 2.0f, 1.0f, -19712);
         }
         if (this.currentTab == 0) {
-            this.renderOnlineTabNanoVG(nvg, mouseX, mouseY, panelX, panelY, panelW, panelH);
+            this.renderOnlineTabSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
         } else if (this.currentTab == 1 || this.currentTab == 2) {
-            this.renderLocalTabNanoVG(nvg, mouseX, mouseY, panelX, panelY, panelW, panelH, this.currentTab == 2);
-            this.renderPlayerBarNanoVG(nvg, mouseX, mouseY, panelX + 8, panelY + panelH - 70, panelW - 16);
+            this.renderLocalTabSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH, this.currentTab == 2);
+            this.renderPlayerBarSkija(skija, mouseX, mouseY, panelX + 8, panelY + panelH - 70, panelW - 16);
         } else if (this.currentTab == 3) {
-            this.renderSettingsTabNanoVG(nvg, mouseX, mouseY, panelX, panelY, panelW, panelH);
+            this.renderSettingsTabSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
         }
         if (this.trackMenuIndex != -1) {
-            this.renderTrackMenuNanoVG(nvg, mouseX, mouseY);
+            this.renderTrackMenuSkija(skija, mouseX, mouseY);
         }
         int uploads = FileSenderManager.getInstance().getUploadsCount();
         int downloads = FileReceiverManager.getInstance().getDownloadsCount();
         if (uploads > 0) {
-            nvg.drawText(DrawUtils.t("Uploading: ", "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432: ") + uploads, panelX + panelW - 10, panelY - 10, 10.0f, this.accent(), true, 20);
+            skija.drawText(DrawUtils.t("Uploading: ", "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0444\u0430\u0439\u043b\u043e\u0432: ") + uploads, panelX + panelW - 10, panelY - 10, 10.0f, this.accent(), true, 20);
         }
         if (downloads > 0) {
-            nvg.drawText(DrawUtils.t("Downloading: ", "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435: ") + downloads, panelX + panelW - 10, panelY - 22, 10.0f, -11141291, true, 20);
+            skija.drawText(DrawUtils.t("Downloading: ", "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u043d\u0438\u0435: ") + downloads, panelX + panelW - 10, panelY - 22, 10.0f, -11141291, true, 20);
         }
     }
 
-    private void renderOnlineTabNanoVG(NanoVGEngine nvg, int mouseX, int mouseY, int px, int py, int pw, int ph) {
+    private void renderOnlineTabSkija(SkijaEngine skija, int mouseX, int mouseY, int px, int py, int pw, int ph) {
         int cx;
         float prog;
         Object displayTitle;
@@ -400,30 +411,30 @@ extends Screen {
         int cardY = py + 42;
         int cardW = pw - 16;
         int cardH = 74;
-        nvg.drawDropShadow(cardX, cardY, cardW, cardH, 8.0f, 12.0f, 1.0f, sourceColor & 0x33FFFFFF);
-        nvg.drawRoundedRect(cardX, cardY, cardW, cardH, 8.0f, this.bgDark());
-        nvg.drawRoundedRectOutline(cardX, cardY, cardW, cardH, 8.0f, 1.0f, hasTrack ? sourceColor : this.border());
+        skija.drawDropShadow(cardX, cardY, cardW, cardH, 8.0f, 12.0f, 1.0f, sourceColor & 0x33FFFFFF);
+        skija.drawRoundedRect(cardX, cardY, cardW, cardH, 8.0f, this.bgDark());
+        skija.drawRoundedRectOutline(cardX, cardY, cardW, cardH, 8.0f, 1.0f, hasTrack ? sourceColor : this.border());
         int coverGlId = hasTrack && this.gsmtc.hasCover() ? this.getGsmtcCoverGlId() : -1;
-        nvg.drawGsmtcCover(coverGlId, cardX + 8, cardY + 8, 58.0f, 6.0f);
+        skija.drawGsmtcCover(coverGlId, cardX + 8, cardY + 8, 58.0f, 6.0f);
         int infoX = cardX + 74;
         float maxTextW = cardW - 82;
-        nvg.drawSourceIcon(infoX + 6, cardY + 15, 6.0f, sourceApp);
-        nvg.drawBadge(infoX + 16, cardY + 9, 12.0f, sourceName, sourceColor);
-        float badgeW = nvg.getTextWidth(sourceName, 7.8f, true) + 26.0f;
+        skija.drawSourceIcon(infoX + 6, cardY + 15, 6.0f, sourceApp);
+        skija.drawBadge(infoX + 16, cardY + 9, 12.0f, sourceName, sourceColor);
+        float badgeW = skija.getTextWidth(sourceName, 7.8f, true) + 26.0f;
         statusText = hasTrack ? (playing ? "\u25cf " + DrawUtils.t("Playing", "\u0418\u0433\u0440\u0430\u0435\u0442") : "II " + DrawUtils.t("Paused", "\u041f\u0430\u0443\u0437\u0430")) : DrawUtils.t("Waiting for music...", "\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u0442\u0440\u0435\u043a\u0430...");
         int statusColor = hasTrack ? (playing ? -11141291 : this.textSecondary()) : this.textSecondary();
-        nvg.drawText(statusText, (float)infoX + badgeW + 6.0f, cardY + 15, 8.5f, statusColor, false, 17);
+        skija.drawText(statusText, (float)infoX + badgeW + 6.0f, cardY + 15, 8.5f, statusColor, false, 17);
         String string2 = title = hasTrack ? this.gsmtc.getTitle() : DrawUtils.t("Turn on music in browser or app", "\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u043c\u0443\u0437\u044b\u043a\u0443 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u0438\u043b\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0438");
         if (title.isEmpty()) {
             title = DrawUtils.t("No title", "\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f");
         }
-        if (nvg.getTextWidth((String)(displayTitle = title), 10.5f, true) > maxTextW) {
-            while (((String)displayTitle).length() > 3 && nvg.getTextWidth((String)displayTitle + "..", 10.5f, true) > maxTextW) {
+        if (skija.getTextWidth((String)(displayTitle = title), 10.5f, true) > maxTextW) {
+            while (((String)displayTitle).length() > 3 && skija.getTextWidth((String)displayTitle + "..", 10.5f, true) > maxTextW) {
                 displayTitle = ((String)displayTitle).substring(0, ((String)displayTitle).length() - 1);
             }
             displayTitle = (String)displayTitle + "..";
         }
-        nvg.drawText((String)displayTitle, infoX, cardY + 32, 10.5f, this.textPrimary(), true, 17);
+        skija.drawText((String)displayTitle, infoX, cardY + 32, 10.5f, this.textPrimary(), true, 17);
         String artist = hasTrack ? this.gsmtc.getArtist() : "";
         String album = hasTrack ? this.gsmtc.getAlbum() : "";
         String sub = artist;
@@ -432,13 +443,13 @@ extends Screen {
         }
         if (!sub.isEmpty()) {
             Object displaySub = sub;
-            if (nvg.getTextWidth((String)displaySub, 8.5f, false) > maxTextW) {
-                while (((String)displaySub).length() > 3 && nvg.getTextWidth((String)displaySub + "..", 8.5f, false) > maxTextW) {
+            if (skija.getTextWidth((String)displaySub, 8.5f, false) > maxTextW) {
+                while (((String)displaySub).length() > 3 && skija.getTextWidth((String)displaySub + "..", 8.5f, false) > maxTextW) {
                     displaySub = ((String)displaySub).substring(0, ((String)displaySub).length() - 1);
                 }
                 displaySub = (String)displaySub + "..";
             }
-            nvg.drawText((String)displaySub, infoX, cardY + 48, 8.5f, this.textSecondary(), false, 17);
+            skija.drawText((String)displaySub, infoX, cardY + 48, 8.5f, this.textSecondary(), false, 17);
         }
         long curSec = (long)this.gsmtc.getPosition();
         long durSec = (long)this.gsmtc.getDuration();
@@ -448,13 +459,13 @@ extends Screen {
             curSec = (long)((float)durSec * prog);
         }
         int timeY = py + 120;
-        nvg.drawText(this.formatTime(curSec), px + 12, timeY, 8.5f, this.textSecondary(), false, 17);
-        nvg.drawText(this.formatTime(durSec), px + pw - 12, timeY, 8.5f, this.textSecondary(), false, 20);
+        skija.drawText(this.formatTime(curSec), px + 12, timeY, 8.5f, this.textSecondary(), false, 17);
+        skija.drawText(this.formatTime(durSec), px + pw - 12, timeY, 8.5f, this.textSecondary(), false, 20);
         int sbX = px + 44;
         int sbW = pw - 88;
         int sbY = timeY - 1;
         boolean hoverSeek = this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10);
-        nvg.drawProgressBar(sbX, sbY, sbW, 3.5f, prog, hoverSeek, sourceColor);
+        skija.drawProgressBar(sbX, sbY, sbW, 3.5f, prog, hoverSeek, sourceColor);
         int btnY = py + 140;
         int btnS = 16;
         int btnW_10 = 20;
@@ -472,72 +483,72 @@ extends Screen {
         int volBarX = volIconX + 12;
         int volBarW = 46;
         boolean hoverDl = this.isInside(mouseX, mouseY, dlBtnX, dlBtnY, dlBtnW, dlBtnH);
-        nvg.drawButtonBase(dlBtnX, dlBtnY, dlBtnW, dlBtnH, hoverDl, this.pressedButtons.contains(301), this.accent());
+        skija.drawButtonBase(dlBtnX, dlBtnY, dlBtnW, dlBtnH, hoverDl, this.pressedButtons.contains(301), this.accent());
         if (hoverDl) {
-            nvg.drawDropShadow(dlBtnX, dlBtnY, dlBtnW, dlBtnH, 4.0f, 8.0f, 1.0f, this.accent() & 0x44FFFFFF);
+            skija.drawDropShadow(dlBtnX, dlBtnY, dlBtnW, dlBtnH, 4.0f, 8.0f, 1.0f, this.accent() & 0x44FFFFFF);
         }
         String dlText = DrawUtils.t("Add", "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c");
         if (!this.downloadStatus.isEmpty() && System.currentTimeMillis() - this.downloadStatusTimestamp < 4000L) {
             dlText = this.downloadStatus;
         }
-        nvg.drawText(dlText, dlBtnX + dlBtnW / 2, dlBtnY + dlBtnH / 2 + 1, 7.8f, hoverDl ? -1 : this.accent(), true, 18);
+        skija.drawText(dlText, dlBtnX + dlBtnW / 2, dlBtnY + dlBtnH / 2 + 1, 7.8f, hoverDl ? -1 : this.accent(), true, 18);
         boolean hoverPrev = this.isInside(mouseX, mouseY, btnPrevX, btnY, btnS, btnS);
-        nvg.drawButtonBase(btnPrevX, btnY, btnS, btnS, hoverPrev, false, this.accent());
-        nvg.drawSkipButton(btnPrevX + 8, btnY + 8, 7.0f, false, hoverPrev);
+        skija.drawButtonBase(btnPrevX, btnY, btnS, btnS, hoverPrev, false, this.accent());
+        skija.drawSkipButton(btnPrevX + 8, btnY + 8, 7.0f, false, hoverPrev);
         boolean hoverRew = this.isInside(mouseX, mouseY, btnRewX, btnY, btnW_10, btnS);
-        nvg.drawButton(btnRewX, btnY, btnW_10, btnS, "-10", hoverRew, false, this.accent(), this.textSecondary());
+        skija.drawButton(btnRewX, btnY, btnW_10, btnS, "-10", hoverRew, false, this.accent(), this.textSecondary());
         boolean hoverPlay = this.isInsideCircle(mouseX, mouseY, playCx, playCy, 12);
-        nvg.drawPlayPauseButton(playCx, playCy, 11.0f, playing, hoverPlay, sourceColor);
+        skija.drawPlayPauseButton(playCx, playCy, 11.0f, playing, hoverPlay, sourceColor);
         boolean hoverFwd = this.isInside(mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS);
-        nvg.drawButton(btnFwdX, btnY, btnW_10, btnS, "+10", hoverFwd, false, this.accent(), this.textSecondary());
+        skija.drawButton(btnFwdX, btnY, btnW_10, btnS, "+10", hoverFwd, false, this.accent(), this.textSecondary());
         boolean hoverNext = this.isInside(mouseX, mouseY, btnNextX, btnY, btnS, btnS);
-        nvg.drawButtonBase(btnNextX, btnY, btnS, btnS, hoverNext, false, this.accent());
-        nvg.drawSkipButton(btnNextX + 8, btnY + 8, 7.0f, true, hoverNext);
+        skija.drawButtonBase(btnNextX, btnY, btnS, btnS, hoverNext, false, this.accent());
+        skija.drawSkipButton(btnNextX + 8, btnY + 8, 7.0f, true, hoverNext);
         float extVol = this.gsmtc.getVolume();
         boolean hoverVol = this.isInside(mouseX, mouseY, volBarX - 4, btnY - 2, volBarW + 8, 16);
-        nvg.drawSpeakerIcon(volIconX, btnY + 8, 8.0f, extVol <= 0.01f, this.textSecondary());
-        nvg.drawProgressBar(volBarX, btnY + 8, volBarW, 3.5f, extVol, hoverVol, sourceColor);
-        nvg.drawText((int)(extVol * 100.0f) + "%", volBarX + volBarW + 12, btnY + 8, 7.2f, this.textSecondary(), false, 18);
+        skija.drawSpeakerIcon(volIconX, btnY + 8, 8.0f, extVol <= 0.01f, this.textSecondary());
+        skija.drawProgressBar(volBarX, btnY + 8, volBarW, 3.5f, extVol, hoverVol, sourceColor);
+        skija.drawText((int)(extVol * 100.0f) + "%", volBarX + volBarW + 12, btnY + 8, 7.2f, this.textSecondary(), false, 18);
         if (sm) {
             int auxY = py + 164;
             int rangeBoxW = 150;
             int rangeBoxX = cx - rangeBoxW / 2;
             boolean hoverRange = this.isInside(mouseX, mouseY, rangeBoxX, auxY - 2, rangeBoxW, 18);
-            nvg.drawDropShadow(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, 6.0f, 0.5f, 587182848);
-            nvg.drawRoundedRect(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, this.bgDark());
-            nvg.drawRoundedRectOutline(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, 1.0f, 1157608192);
-            nvg.drawSpeakerIcon(rangeBoxX + 10, auxY + 7, 7.0f, false, -19712);
+            skija.drawDropShadow(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, 6.0f, 0.5f, 587182848);
+            skija.drawRoundedRect(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, this.bgDark());
+            skija.drawRoundedRectOutline(rangeBoxX, auxY - 2, rangeBoxW, 18.0f, 9.0f, 1.0f, 1157608192);
+            skija.drawSpeakerIcon(rangeBoxX + 10, auxY + 7, 7.0f, false, -19712);
             String rangeStr = ModConfig.getInstance().speakerRange + "\u043c";
-            nvg.drawText(rangeStr, rangeBoxX + 22, auxY + 7, 9.5f, -19712, true, 17);
+            skija.drawText(rangeStr, rangeBoxX + 22, auxY + 7, 9.5f, -19712, true, 17);
             int sliderX = rangeBoxX + 54;
             int sliderW = rangeBoxW - 64;
             float rProgress = (float)(ModConfig.getInstance().speakerRange - 8) / 56.0f;
             boolean hoverSlider = this.isInside(mouseX, mouseY, sliderX - 4, auxY - 2, sliderW + 8, 18);
-            nvg.drawSlider(sliderX, auxY + 4, sliderW, 6.0f, rProgress, -19712, hoverSlider);
+            skija.drawSlider(sliderX, auxY + 4, sliderW, 6.0f, rProgress, -19712, hoverSlider);
         }
     }
 
-    private void renderLocalTabNanoVG(NanoVGEngine nvg, int mouseX, int mouseY, int px, int py, int pw, int ph, boolean showFavorites) {
+    private void renderLocalTabSkija(SkijaEngine skija, int mouseX, int mouseY, int px, int py, int pw, int ph, boolean showFavorites) {
         List<File> playlist = showFavorites ? this.localPlayer.getFavorites() : this.localPlayer.getPlaylist();
         boolean hoverRefresh = this.isInside(mouseX, mouseY, px + 8, py + 28, 22, 16);
-        nvg.drawButtonBase(px + 8, py + 28, 22.0f, 16.0f, hoverRefresh, this.pressedButtons.contains(110), this.accent());
-        nvg.drawRefreshIcon(px + 19, py + 36, 4.5f, hoverRefresh ? this.accent() : this.textSecondary());
+        skija.drawButtonBase(px + 8, py + 28, 22.0f, 16.0f, hoverRefresh, this.pressedButtons.contains(110), this.accent());
+        skija.drawRefreshIcon(px + 19, py + 36, 4.5f, hoverRefresh ? this.accent() : this.textSecondary());
         boolean hoverFolder = this.isInside(mouseX, mouseY, px + 34, py + 28, 22, 16);
-        nvg.drawButtonBase(px + 34, py + 28, 22.0f, 16.0f, hoverFolder, this.pressedButtons.contains(111), this.accent());
-        nvg.drawFolderIcon(px + 45, py + 36, 11.0f, 9.0f, hoverFolder ? this.accent() : this.textSecondary());
-        nvg.drawText(DrawUtils.t("Tracks: ", "\u0422\u0440\u0435\u043a\u043e\u0432: ") + playlist.size(), px + 62, py + 36, 10.0f, this.textSecondary(), false, 17);
+        skija.drawButtonBase(px + 34, py + 28, 22.0f, 16.0f, hoverFolder, this.pressedButtons.contains(111), this.accent());
+        skija.drawFolderIcon(px + 45, py + 36, 11.0f, 9.0f, hoverFolder ? this.accent() : this.textSecondary());
+        skija.drawText(DrawUtils.t("Tracks: ", "\u0422\u0440\u0435\u043a\u043e\u0432: ") + playlist.size(), px + 62, py + 36, 10.0f, this.textSecondary(), false, 17);
         if (this.localPlayer.isConverting()) {
-            nvg.drawText(DrawUtils.t("Converting MP3...", "\u041a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f MP3..."), px + 130, py + 36, 9.5f, this.accent(), true, 17);
+            skija.drawText(DrawUtils.t("Converting MP3...", "\u041a\u043e\u043d\u0432\u0435\u0440\u0442\u0430\u0446\u0438\u044f MP3..."), px + 130, py + 36, 9.5f, this.accent(), true, 17);
         }
         int listX = px + 8;
         int listY = py + 48;
         int listW = pw - 16;
         int listH = 114;
-        nvg.drawRoundedRect(listX, listY, listW, listH, 6.0f, this.bgDark());
-        nvg.drawRoundedRectOutline(listX, listY, listW, listH, 6.0f, 1.0f, this.border());
+        skija.drawRoundedRect(listX, listY, listW, listH, 6.0f, this.bgDark());
+        skija.drawRoundedRectOutline(listX, listY, listW, listH, 6.0f, 1.0f, this.border());
         if (playlist.isEmpty()) {
-            nvg.drawText(DrawUtils.t("Add .mp3 or .wav to mp3player folder", "\u0417\u0430\u043a\u0438\u043d\u044c\u0442\u0435 .mp3 \u0438\u043b\u0438 .wav \u0432 \u043f\u0430\u043f\u043a\u0443 mp3player"), listX + listW / 2, listY + listH / 2 - 8, 10.0f, this.textSecondary(), false, 18);
-            nvg.drawText(DrawUtils.t("MP3s are converted automatically", "MP3 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0438\u0440\u0443\u044e\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438"), listX + listW / 2, listY + listH / 2 + 8, 9.0f, this.textSecondary(), false, 18);
+            skija.drawText(DrawUtils.t("Add .mp3 or .wav to mp3player folder", "\u0417\u0430\u043a\u0438\u043d\u044c\u0442\u0435 .mp3 \u0438\u043b\u0438 .wav \u0432 \u043f\u0430\u043f\u043a\u0443 mp3player"), listX + listW / 2, listY + listH / 2 - 8, 10.0f, this.textSecondary(), false, 18);
+            skija.drawText(DrawUtils.t("MP3s are converted automatically", "MP3 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0438\u0440\u0443\u044e\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438"), listX + listW / 2, listY + listH / 2 + 8, 9.0f, this.textSecondary(), false, 18);
         } else {
             int scroll;
             for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 7); ++i) {
@@ -550,20 +561,20 @@ extends Screen {
                 boolean current = f.equals(this.localPlayer.getPlaylist().isEmpty() ? null : this.localPlayer.getPlaylist().get(this.localPlayer.getCurrentIndex())) && this.localPlayer.isPlaying();
                 boolean isFav = this.localPlayer.getFavorites().contains(f);
                 if (hover) {
-                    nvg.drawRoundedRect(itemX, itemY, itemW, itemH, 4.0f, this.bgHover());
+                    skija.drawRoundedRect(itemX, itemY, itemW, itemH, 4.0f, this.bgHover());
                 }
                 if (current) {
-                    nvg.drawRoundedRect(itemX, itemY, 3.0f, itemH, 1.5f, this.accent());
+                    skija.drawRoundedRect(itemX, itemY, 3.0f, itemH, 1.5f, this.accent());
                 }
                 float iconCx = (float)itemX + 9.0f;
                 float iconCy = (float)itemY + (float)itemH * 0.5f;
                 if (current) {
-                    nvg.drawMiniDisc(iconCx, iconCy, 5.5f, -15197662, this.accent());
-                    nvg.drawMiniPlayIcon(iconCx + 0.5f, iconCy, 2.5f, -1);
+                    skija.drawMiniDisc(iconCx, iconCy, 5.5f, -15197662, this.accent());
+                    skija.drawMiniPlayIcon(iconCx + 0.5f, iconCy, 2.5f, -1);
                 } else {
-                    nvg.drawMiniDisc(iconCx, iconCy, 5.0f, -14671058, isFav ? -46226 : -10193781);
+                    skija.drawMiniDisc(iconCx, iconCy, 5.0f, -14671058, isFav ? -46226 : -10193781);
                     if (isFav) {
-                        nvg.drawHeartIcon(iconCx + 8.5f, iconCy, 5.0f, true, false);
+                        skija.drawHeartIcon(iconCx + 8.5f, iconCy, 5.0f, true, false);
                     }
                 }
                 String name = f.getName();
@@ -573,47 +584,47 @@ extends Screen {
                 }
                 float maxNameW = itemW - 80;
                 Object displayName = name;
-                if (nvg.getTextWidth((String)displayName, 9.5f, current) > maxNameW) {
-                    while (((String)displayName).length() > 3 && nvg.getTextWidth((String)displayName + "..", 9.5f, current) > maxNameW) {
+                if (skija.getTextWidth((String)displayName, 9.5f, current) > maxNameW) {
+                    while (((String)displayName).length() > 3 && skija.getTextWidth((String)displayName + "..", 9.5f, current) > maxNameW) {
                         displayName = ((String)displayName).substring(0, ((String)displayName).length() - 1);
                     }
                     displayName = (String)displayName + "..";
                 }
                 int col = current ? this.accent() : this.textPrimary();
                 float nameStartX = isFav && !current ? (float)(itemX + 26) : (float)(itemX + 19);
-                nvg.drawText((String)displayName, nameStartX, (float)itemY + (float)itemH * 0.5f + 0.5f, 9.5f, col, current, 17);
+                skija.drawText((String)displayName, nameStartX, (float)itemY + (float)itemH * 0.5f + 0.5f, 9.5f, col, current, 17);
                 boolean hoverPlay = this.isInside(mouseX, mouseY, itemX + itemW - 60, itemY + 1, 16, 13);
                 boolean hoverDel = this.isInside(mouseX, mouseY, itemX + itemW - 40, itemY + 1, 16, 13);
                 boolean hoverDots = this.isInside(mouseX, mouseY, itemX + itemW - 20, itemY + 1, 16, 13);
                 if (hoverPlay) {
-                    nvg.drawRoundedRect(itemX + itemW - 60, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FFFFFF);
+                    skija.drawRoundedRect(itemX + itemW - 60, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FFFFFF);
                 }
                 if (hoverDel) {
-                    nvg.drawRoundedRect(itemX + itemW - 40, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FF5555);
+                    skija.drawRoundedRect(itemX + itemW - 40, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FF5555);
                 }
                 if (hoverDots) {
-                    nvg.drawRoundedRect(itemX + itemW - 20, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FFFFFF);
+                    skija.drawRoundedRect(itemX + itemW - 20, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FFFFFF);
                 }
                 if (current) {
-                    nvg.drawMiniPauseIcon(itemX + itemW - 52, (float)itemY + (float)itemH * 0.5f, 3.0f, hoverPlay ? this.accent() : this.textSecondary());
+                    skija.drawMiniPauseIcon(itemX + itemW - 52, (float)itemY + (float)itemH * 0.5f, 3.0f, hoverPlay ? this.accent() : this.textSecondary());
                 } else {
-                    nvg.drawMiniPlayIcon(itemX + itemW - 52, (float)itemY + (float)itemH * 0.5f, 3.5f, hoverPlay ? this.accent() : this.textSecondary());
+                    skija.drawMiniPlayIcon(itemX + itemW - 52, (float)itemY + (float)itemH * 0.5f, 3.5f, hoverPlay ? this.accent() : this.textSecondary());
                 }
-                nvg.drawCrossIcon(itemX + itemW - 32, (float)itemY + (float)itemH * 0.5f, 6.0f, hoverDel ? -43691 : this.textSecondary());
-                nvg.drawDotsIcon(itemX + itemW - 12, (float)itemY + (float)itemH * 0.5f, 1.2f, hoverDots ? this.accent() : this.textSecondary());
+                skija.drawCrossIcon(itemX + itemW - 32, (float)itemY + (float)itemH * 0.5f, 6.0f, hoverDel ? -43691 : this.textSecondary());
+                skija.drawDotsIcon(itemX + itemW - 12, (float)itemY + (float)itemH * 0.5f, 1.2f, hoverDots ? this.accent() : this.textSecondary());
             }
         }
     }
 
-    private void renderPlayerBarNanoVG(NanoVGEngine nvg, int mouseX, int mouseY, int barX, int barY, int barW) {
+    private void renderPlayerBarSkija(SkijaEngine skija, int mouseX, int mouseY, int barX, int barY, int barW) {
         boolean sm = ModConfig.getInstance().speakerMode;
         int outlineColor = sm ? -19712 : this.accent();
         String badge = sm ? DrawUtils.t("Speaker", "\u041a\u043e\u043b\u043e\u043d\u043a\u0430") : DrawUtils.t("Local", "MP3");
         int badgeColor = outlineColor;
         int barH = 68;
-        nvg.drawDropShadow(barX, barY, barW, barH, 8.0f, 12.0f, 1.0f, outlineColor & 0x44FFFFFF);
-        nvg.drawRoundedRect(barX, barY, barW, barH, 8.0f, this.bgDark());
-        nvg.drawRoundedRectOutline(barX, barY, barW, barH, 8.0f, 1.0f, outlineColor);
+        skija.drawDropShadow(barX, barY, barW, barH, 8.0f, 12.0f, 1.0f, outlineColor & 0x44FFFFFF);
+        skija.drawRoundedRect(barX, barY, barW, barH, 8.0f, this.bgDark());
+        skija.drawRoundedRectOutline(barX, barY, barW, barH, 8.0f, 1.0f, outlineColor);
         String trackInfo = this.localPlayer.getCurrentTrackName();
         long durMicros = this.localPlayer.getDuration();
         long posMicros = this.localPlayer.getCurrentPosition();
@@ -623,25 +634,25 @@ extends Screen {
         boolean playing = this.localPlayer.isPlaying();
         float vol = this.localPlayer.getVolume();
         int coverGlId = this.getLocalCoverGlId();
-        nvg.drawLocalCover(coverGlId, barX + 6, barY + 6, 34.0f, 5.0f);
-        float badgeW = nvg.getTextWidth(badge, 7.8f, true) + 12.0f;
-        nvg.drawBadge(barX + 46, barY + 6, 12.0f, badge, badgeColor);
+        skija.drawLocalCover(coverGlId, barX + 6, barY + 6, 34.0f, 5.0f);
+        float badgeW = skija.getTextWidth(badge, 7.8f, true) + 12.0f;
+        skija.drawBadge(barX + 46, barY + 6, 12.0f, badge, badgeColor);
         float maxTitleW = (float)(barW - 46) - badgeW - 12.0f;
         Object displayTitle = trackInfo;
-        if (nvg.getTextWidth((String)displayTitle, 10.0f, true) > maxTitleW) {
-            while (((String)displayTitle).length() > 3 && nvg.getTextWidth((String)displayTitle + "..", 10.0f, true) > maxTitleW) {
+        if (skija.getTextWidth((String)displayTitle, 10.0f, true) > maxTitleW) {
+            while (((String)displayTitle).length() > 3 && skija.getTextWidth((String)displayTitle + "..", 10.0f, true) > maxTitleW) {
                 displayTitle = ((String)displayTitle).substring(0, ((String)displayTitle).length() - 1);
             }
             displayTitle = (String)displayTitle + "..";
         }
-        nvg.drawText((String)displayTitle, (float)(barX + 46) + badgeW + 6.0f, barY + 12, 10.0f, this.textPrimary(), true, 17);
+        skija.drawText((String)displayTitle, (float)(barX + 46) + badgeW + 6.0f, barY + 12, 10.0f, this.textPrimary(), true, 17);
         int sbX = barX + 46;
         int sbW = barW - 126;
         int sbY = barY + 28;
         boolean hoverSeek = this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10);
-        nvg.drawProgressBar(sbX, sbY, sbW, 3.0f, prog, hoverSeek, outlineColor);
+        skija.drawProgressBar(sbX, sbY, sbW, 3.0f, prog, hoverSeek, outlineColor);
         String timerText = this.formatTime(posSec) + " / " + this.formatTime(durSec);
-        nvg.drawText(timerText, sbX + sbW + 6, sbY + 1, 8.0f, this.textSecondary(), false, 17);
+        skija.drawText(timerText, sbX + sbW + 6, sbY + 1, 8.0f, this.textSecondary(), false, 17);
         int ctrlCenter = barX + barW / 2;
         int btnY = barY + 46;
         int btnS = 16;
@@ -653,45 +664,45 @@ extends Screen {
         int btnFwdX = ctrlCenter + 17;
         int btnNextX = ctrlCenter + 45;
         boolean hoverPrev = this.isInside(mouseX, mouseY, btnPrevX, btnY, btnS, btnS);
-        nvg.drawButtonBase(btnPrevX, btnY, btnS, btnS, hoverPrev, false, this.accent());
-        nvg.drawSkipButton(btnPrevX + 8, btnY + 8, 7.0f, false, hoverPrev);
+        skija.drawButtonBase(btnPrevX, btnY, btnS, btnS, hoverPrev, false, this.accent());
+        skija.drawSkipButton(btnPrevX + 8, btnY + 8, 7.0f, false, hoverPrev);
         boolean hoverRew = this.isInside(mouseX, mouseY, btnRewX, btnY, btnW_10, btnS);
-        nvg.drawButton(btnRewX, btnY, btnW_10, btnS, "-10", hoverRew, false, this.accent(), this.textSecondary());
+        skija.drawButton(btnRewX, btnY, btnW_10, btnS, "-10", hoverRew, false, this.accent(), this.textSecondary());
         boolean hoverPlay = this.isInsideCircle(mouseX, mouseY, playCx, playCy, 10);
-        nvg.drawPlayPauseButton(playCx, playCy, 9.5f, playing, hoverPlay, outlineColor);
+        skija.drawPlayPauseButton(playCx, playCy, 9.5f, playing, hoverPlay, outlineColor);
         boolean hoverFwd = this.isInside(mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS);
-        nvg.drawButton(btnFwdX, btnY, btnW_10, btnS, "+10", hoverFwd, false, this.accent(), this.textSecondary());
+        skija.drawButton(btnFwdX, btnY, btnW_10, btnS, "+10", hoverFwd, false, this.accent(), this.textSecondary());
         boolean hoverNext = this.isInside(mouseX, mouseY, btnNextX, btnY, btnS, btnS);
-        nvg.drawButtonBase(btnNextX, btnY, btnS, btnS, hoverNext, false, this.accent());
-        nvg.drawSkipButton(btnNextX + 8, btnY + 8, 7.0f, true, hoverNext);
+        skija.drawButtonBase(btnNextX, btnY, btnS, btnS, hoverNext, false, this.accent());
+        skija.drawSkipButton(btnNextX + 8, btnY + 8, 7.0f, true, hoverNext);
         if (sm) {
             int rangeX = barX + 6;
-            nvg.drawText(DrawUtils.t("Range", "\u0420\u0430\u0434\u0438\u0443\u0441"), rangeX, btnY + 1, 7.0f, this.textSecondary(), false, 17);
+            skija.drawText(DrawUtils.t("Range", "\u0420\u0430\u0434\u0438\u0443\u0441"), rangeX, btnY + 1, 7.0f, this.textSecondary(), false, 17);
             int maxRange = 64;
             int minRange = 8;
             float rProgress = (float)(ModConfig.getInstance().speakerRange - minRange) / (float)(maxRange - minRange);
-            nvg.drawProgressBar(rangeX, btnY + 8, 34.0f, 3.0f, rProgress, false, this.accent());
+            skija.drawProgressBar(rangeX, btnY + 8, 34.0f, 3.0f, rProgress, false, this.accent());
         }
         int volIconX = barX + barW - 54;
         int volBarX = barX + barW - 44;
         boolean hoverVol = this.isInside(mouseX, mouseY, volBarX - 2, btnY + 5, 44, 8);
-        nvg.drawSpeakerIcon(volIconX, btnY + 8, 9.0f, vol <= 0.001f, this.textSecondary());
-        nvg.drawProgressBar(volBarX, btnY + 7, 40.0f, 3.0f, vol, hoverVol, this.accent());
+        skija.drawSpeakerIcon(volIconX, btnY + 8, 9.0f, vol <= 0.001f, this.textSecondary());
+        skija.drawProgressBar(volBarX, btnY + 7, 40.0f, 3.0f, vol, hoverVol, this.accent());
     }
 
-    private void renderTrackMenuNanoVG(NanoVGEngine nvg, int mouseX, int mouseY) {
+    private void renderTrackMenuSkija(SkijaEngine skija, int mouseX, int mouseY) {
         int w = 135;
         int h = 90;
-        nvg.drawDropShadow(this.trackMenuX, this.trackMenuY, w, h, 8.0f, 16.0f, 2.0f, 0x66000000);
-        nvg.drawRoundedRect(this.trackMenuX, this.trackMenuY, w, h, 8.0f, this.bgDark());
-        nvg.drawRoundedRectOutline(this.trackMenuX, this.trackMenuY, w, h, 8.0f, 1.0f, this.border());
+        skija.drawDropShadow(this.trackMenuX, this.trackMenuY, w, h, 8.0f, 16.0f, 2.0f, 0x66000000);
+        skija.drawRoundedRect(this.trackMenuX, this.trackMenuY, w, h, 8.0f, this.bgDark());
+        skija.drawRoundedRectOutline(this.trackMenuX, this.trackMenuY, w, h, 8.0f, 1.0f, this.border());
         String[] labels = new String[]{DrawUtils.t("Favorite", "\u041d\u0440\u0430\u0432\u0438\u0442\u0441\u044f"), DrawUtils.t("Repeat", "\u041f\u043e\u0432\u0442\u043e\u0440"), DrawUtils.t("Make Disc", "\u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0430"), DrawUtils.t("Info", "\u0421\u0432\u0435\u0434\u0435\u043d\u0438\u044f"), DrawUtils.t("Share", "\u041f\u043e\u0434\u0435\u043b\u0438\u0442\u044c\u0441\u044f"), DrawUtils.t("Delete", "\u0423\u0434\u0430\u043b\u0438\u0442\u044c")};
         for (int i = 0; i < 6; ++i) {
             int color;
             int y = this.trackMenuY + 3 + i * 14;
             boolean hover = this.isInside(mouseX, mouseY, this.trackMenuX + 2, y, w - 4, 14);
             if (hover) {
-                nvg.drawRoundedRect(this.trackMenuX + 2, y, w - 4, 14.0f, 4.0f, this.bgHover());
+                skija.drawRoundedRect(this.trackMenuX + 2, y, w - 4, 14.0f, 4.0f, this.bgHover());
             }
             color = (i == 1 && this.localPlayer.isRepeat()) ? this.accent() : (hover ? this.accent() : this.textPrimary());
             if (i == 5) {
@@ -711,48 +722,48 @@ extends Screen {
                 case 5 -> "\ue872";
                 default -> "";
             };
-            nvg.drawIcon(menuIcon, this.trackMenuX + 11, (float)y + 7.5f, 10.5f, color, 18);
-            nvg.drawText(labels[i], this.trackMenuX + 22, y + 7, 9.0f, color, hover, 17);
+            skija.drawIcon(menuIcon, this.trackMenuX + 11, (float)y + 7.5f, 10.5f, color, 18);
+            skija.drawText(labels[i], this.trackMenuX + 22, y + 7, 9.0f, color, hover, 17);
         }
     }
 
-    private void renderSettingsTabNanoVG(NanoVGEngine nvg, int mouseX, int mouseY, int px, int py, int pw, int ph) {
+    private void renderSettingsTabSkija(SkijaEngine skija, int mouseX, int mouseY, int px, int py, int pw, int ph) {
         int sx = px + 8;
         int sy = py + 30;
         int sw = pw - 16;
         int sh = ph - 36;
-        nvg.drawDropShadow(sx, sy, sw, sh, 8.0f, 12.0f, 1.0f, 0x44000000);
-        nvg.drawRoundedRect(sx, sy, sw, sh, 10.0f, this.bgDark());
-        nvg.drawRoundedRectOutline(sx, sy, sw, sh, 10.0f, 1.0f, this.border());
-        nvg.scissor(sx + 2, sy + 2, sw - 4, sh - 4);
+        skija.drawDropShadow(sx, sy, sw, sh, 8.0f, 12.0f, 1.0f, 0x44000000);
+        skija.drawRoundedRect(sx, sy, sw, sh, 10.0f, this.bgDark());
+        skija.drawRoundedRectOutline(sx, sy, sw, sh, 10.0f, 1.0f, this.border());
+        skija.scissor(sx + 2, sy + 2, sw - 4, sh - 4);
         int cy = sy + 8 - this.settingsScroll;
         int cardX = sx + 8;
         int cardW = sw - 16;
-        nvg.drawText(DrawUtils.t("APPEARANCE & INTERFACE", "\u0412\u041d\u0415\u0428\u041d\u0418\u0419 \u0412\u0418\u0414 \u0418 \u0418\u041d\u0422\u0415\u0420\u0424\u0415\u0419\u0421"), sx + 12, cy + 6, 8.5f, this.accent(), true, 17);
+        skija.drawText(DrawUtils.t("APPEARANCE & INTERFACE", "\u0412\u041d\u0415\u0428\u041d\u0418\u0419 \u0412\u0418\u0414 \u0418 \u0418\u041d\u0422\u0415\u0420\u0424\u0415\u0419\u0421"), sx + 12, cy + 6, 8.5f, this.accent(), true, 17);
         int card1Y = cy + 18;
         int card1H = 80;
-        nvg.drawRoundedRect(cardX, card1Y, cardW, card1H, 8.0f, this.bgPanel());
-        nvg.drawRoundedRectOutline(cardX, card1Y, cardW, card1H, 8.0f, 0.8f, this.border());
-        nvg.drawMoonSunIcon(cardX + 16, card1Y + 13, 5.5f, darkTheme, this.accent());
-        nvg.drawText(DrawUtils.t("Theme Mode", "\u0422\u0435\u043c\u0430 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f"), cardX + 28, card1Y + 13, 8.5f, this.textPrimary(), false, 17);
+        skija.drawRoundedRect(cardX, card1Y, cardW, card1H, 8.0f, this.bgPanel());
+        skija.drawRoundedRectOutline(cardX, card1Y, cardW, card1H, 8.0f, 0.8f, this.border());
+        skija.drawMoonSunIcon(cardX + 16, card1Y + 13, 5.5f, darkTheme, this.accent());
+        skija.drawText(DrawUtils.t("Theme Mode", "\u0422\u0435\u043c\u0430 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f"), cardX + 28, card1Y + 13, 8.5f, this.textPrimary(), false, 17);
         int pillThemeW = 84;
         int pillThemeH = 18;
         int pillThemeX = cardX + cardW - pillThemeW - 10;
         int pillThemeY = card1Y + 4;
         boolean hoverTheme = this.isInside(mouseX, mouseY, pillThemeX, pillThemeY, pillThemeW, pillThemeH);
         String themeText = darkTheme ? DrawUtils.t("Dark", "\u0422\u0451\u043c\u043d\u0430\u044f") : DrawUtils.t("Light", "\u0421\u0432\u0435\u0442\u043b\u0430\u044f");
-        nvg.drawButton(pillThemeX, pillThemeY, pillThemeW, pillThemeH, themeText, hoverTheme, false, this.accent(), this.textPrimary());
-        nvg.drawRoundedRect(cardX + 10, card1Y + 26, cardW - 20, 0.6f, 0.3f, this.border());
-        nvg.drawText(DrawUtils.t("Interface Language", "\u042f\u0437\u044b\u043a \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430"), cardX + 14, card1Y + 39, 8.5f, this.textPrimary(), false, 17);
+        skija.drawButton(pillThemeX, pillThemeY, pillThemeW, pillThemeH, themeText, hoverTheme, false, this.accent(), this.textPrimary());
+        skija.drawRoundedRect(cardX + 10, card1Y + 26, cardW - 20, 0.6f, 0.3f, this.border());
+        skija.drawText(DrawUtils.t("Interface Language", "\u042f\u0437\u044b\u043a \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430"), cardX + 14, card1Y + 39, 8.5f, this.textPrimary(), false, 17);
         int pillLangW = 84;
         int pillLangH = 18;
         int pillLangX = cardX + cardW - pillLangW - 10;
         int pillLangY = card1Y + 30;
         boolean hoverLang = this.isInside(mouseX, mouseY, pillLangX, pillLangY, pillLangW, pillLangH);
         String langText = ModConfig.getInstance().isEnglish ? "English" : "\u0420\u0443\u0441\u0441\u043a\u0438\u0439";
-        nvg.drawButton(pillLangX, pillLangY, pillLangW, pillLangH, langText, hoverLang, false, -13058568, this.textPrimary());
-        nvg.drawRoundedRect(cardX + 10, card1Y + 52, cardW - 20, 0.6f, 0.3f, this.border());
-        nvg.drawText(DrawUtils.t("Dynamic Island HUD", "\u041e\u0432\u0435\u0440\u043b\u0435\u0439 Dynamic Island"), cardX + 14, card1Y + 65, 8.5f, this.textPrimary(), false, 17);
+        skija.drawButton(pillLangX, pillLangY, pillLangW, pillLangH, langText, hoverLang, false, -13058568, this.textPrimary());
+        skija.drawRoundedRect(cardX + 10, card1Y + 52, cardW - 20, 0.6f, 0.3f, this.border());
+        skija.drawText(DrawUtils.t("Dynamic Island HUD", "\u041e\u0432\u0435\u0440\u043b\u0435\u0439 Dynamic Island"), cardX + 14, card1Y + 65, 8.5f, this.textPrimary(), false, 17);
         int pillHudW = 84;
         int pillHudH = 18;
         int pillHudX = cardX + cardW - pillHudW - 10;
@@ -760,13 +771,13 @@ extends Screen {
         boolean hudActive = this.gsmtc.isHudEnabled();
         String hudText = hudActive ? DrawUtils.t("ON", "\u0412\u041a\u041b") : DrawUtils.t("OFF", "\u0412\u042b\u041a\u041b");
         boolean hoverHud = this.isInside(mouseX, mouseY, pillHudX, pillHudY, pillHudW, pillHudH);
-        nvg.drawTogglePill(pillHudX, pillHudY, pillHudW, pillHudH, hudText, hudActive, hoverHud, -15681151);
+        skija.drawTogglePill(pillHudX, pillHudY, pillHudW, pillHudH, hudText, hudActive, hoverHud, -15681151);
         int sec2Y = cy + 108;
-        nvg.drawText(DrawUtils.t("AUDIO & 3D SPEAKER", "\u0417\u0412\u0423\u041a \u0418 3D \u041a\u041e\u041b\u041e\u041d\u041a\u0410"), sx + 12, sec2Y + 6, 8.5f, -19712, true, 17);
+        skija.drawText(DrawUtils.t("AUDIO & 3D SPEAKER", "\u0417\u0412\u0423\u041a \u0418 3D \u041a\u041e\u041b\u041e\u041d\u041a\u0410"), sx + 12, sec2Y + 6, 8.5f, -19712, true, 17);
         int card2Y = sec2Y + 18;
         int card2H = 92;
-        nvg.drawRoundedRect(cardX, card2Y, cardW, card2H, 8.0f, this.bgPanel());
-        nvg.drawRoundedRectOutline(cardX, card2Y, cardW, card2H, 8.0f, 0.8f, this.border());
+        skija.drawRoundedRect(cardX, card2Y, cardW, card2H, 8.0f, this.bgPanel());
+        skija.drawRoundedRectOutline(cardX, card2Y, cardW, card2H, 8.0f, 0.8f, this.border());
         int btnW = (cardW - 28) / 2;
         int btnH = 20;
         int btn1X = cardX + 10;
@@ -776,14 +787,14 @@ extends Screen {
         boolean soundOn = !ModConfig.getInstance().muteGlobal;
         String soundText = soundOn ? DrawUtils.t("Sound: ON", "\u0417\u0432\u0443\u043a: \u0412\u041a\u041b") : DrawUtils.t("Sound: OFF", "\u0417\u0432\u0443\u043a: \u0412\u042b\u041a\u041b");
         boolean hoverSound = this.isInside(mouseX, mouseY, btn1X, btn1Y, btnW, btnH);
-        nvg.drawTogglePill(btn1X, btn1Y, btnW, btnH, soundText, soundOn, hoverSound, this.accent());
+        skija.drawTogglePill(btn1X, btn1Y, btnW, btnH, soundText, soundOn, hoverSound, this.accent());
         boolean spkOn = ModConfig.getInstance().speakerMode;
         String spkText = spkOn ? DrawUtils.t("3D: ON", "3D: \u0412\u041a\u041b") : DrawUtils.t("3D: OFF", "3D: \u0412\u042b\u041a\u041b");
         boolean hoverSpk = this.isInside(mouseX, mouseY, btn2X, btn2Y, btnW, btnH);
-        nvg.drawTogglePill(btn2X, btn2Y, btnW, btnH, spkText, spkOn, hoverSpk, -19712);
-        nvg.drawRoundedRect(cardX + 10, card2Y + 31, cardW - 20, 0.6f, 0.3f, this.border());
-        nvg.drawSpeakerIcon(cardX + 16, card2Y + 45, 6.5f, false, -19712);
-        nvg.drawText(DrawUtils.t("3D Sound Radius", "\u0420\u0430\u0434\u0438\u0443\u0441 3D \u0437\u0432\u0443\u043a\u0430"), cardX + 26, card2Y + 45, 8.5f, -19712, false, 17);
+        skija.drawTogglePill(btn2X, btn2Y, btnW, btnH, spkText, spkOn, hoverSpk, -19712);
+        skija.drawRoundedRect(cardX + 10, card2Y + 31, cardW - 20, 0.6f, 0.3f, this.border());
+        skija.drawSpeakerIcon(cardX + 16, card2Y + 45, 6.5f, false, -19712);
+        skija.drawText(DrawUtils.t("3D Sound Radius", "\u0420\u0430\u0434\u0438\u0443\u0441 3D \u0437\u0432\u0443\u043a\u0430"), cardX + 26, card2Y + 45, 8.5f, -19712, false, 17);
         int slRangeW = 108;
         int slRangeH = 6;
         int badgeW = 34;
@@ -792,36 +803,36 @@ extends Screen {
         int badgeY = card2Y + 37;
         int slRangeX = badgeX - slRangeW - 8;
         int slRangeY = card2Y + 42;
-        nvg.drawRoundedRect(badgeX, badgeY, badgeW, badgeH, 4.0f, 587182848);
-        nvg.drawRoundedRectOutline(badgeX, badgeY, badgeW, badgeH, 4.0f, 0.8f, -19712);
-        nvg.drawText(ModConfig.getInstance().speakerRange + "\u043c", (float)badgeX + (float)badgeW * 0.5f, (float)badgeY + (float)badgeH * 0.5f + 0.5f, 7.5f, -19712, true, 18);
+        skija.drawRoundedRect(badgeX, badgeY, badgeW, badgeH, 4.0f, 587182848);
+        skija.drawRoundedRectOutline(badgeX, badgeY, badgeW, badgeH, 4.0f, 0.8f, -19712);
+        skija.drawText(ModConfig.getInstance().speakerRange + "\u043c", (float)badgeX + (float)badgeW * 0.5f, (float)badgeY + (float)badgeH * 0.5f + 0.5f, 7.5f, -19712, true, 18);
         float rProg = (float)(ModConfig.getInstance().speakerRange - 8) / 56.0f;
         boolean hoverRange = this.isInside(mouseX, mouseY, slRangeX - 4, slRangeY - 5, slRangeW + 8, 16);
-        nvg.drawSlider(slRangeX, slRangeY, slRangeW, slRangeH, rProg, -19712, hoverRange);
-        nvg.drawRoundedRect(cardX + 10, card2Y + 61, cardW - 20, 0.6f, 0.3f, this.border());
+        skija.drawSlider(slRangeX, slRangeY, slRangeW, slRangeH, rProg, -19712, hoverRange);
+        skija.drawRoundedRect(cardX + 10, card2Y + 61, cardW - 20, 0.6f, 0.3f, this.border());
         float curVol = this.localPlayer.getVolume();
-        nvg.drawSpeakerIcon(cardX + 16, card2Y + 75, 6.5f, curVol <= 0.001f, this.accent());
-        nvg.drawText(DrawUtils.t("MP3 Music Volume", "\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c MP3"), cardX + 26, card2Y + 75, 8.5f, this.accent(), false, 17);
+        skija.drawSpeakerIcon(cardX + 16, card2Y + 75, 6.5f, curVol <= 0.001f, this.accent());
+        skija.drawText(DrawUtils.t("MP3 Music Volume", "\u0413\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u044c MP3"), cardX + 26, card2Y + 75, 8.5f, this.accent(), false, 17);
         int slVolW = 108;
         int slVolH = 6;
         int badgeVolX = cardX + cardW - badgeW - 10;
         int badgeVolY = card2Y + 67;
         int slVolX = badgeVolX - slVolW - 8;
         int slVolY = card2Y + 72;
-        nvg.drawRoundedRect(badgeVolX, badgeVolY, badgeW, badgeH, 4.0f, this.accent() & 0xFFFFFF | 0x22000000);
-        nvg.drawRoundedRectOutline(badgeVolX, badgeVolY, badgeW, badgeH, 4.0f, 0.8f, this.accent());
-        nvg.drawText((int)(curVol * 100.0f) + "%", (float)badgeVolX + (float)badgeW * 0.5f, (float)badgeVolY + (float)badgeH * 0.5f + 0.5f, 7.5f, this.accent(), true, 18);
+        skija.drawRoundedRect(badgeVolX, badgeVolY, badgeW, badgeH, 4.0f, this.accent() & 0xFFFFFF | 0x22000000);
+        skija.drawRoundedRectOutline(badgeVolX, badgeVolY, badgeW, badgeH, 4.0f, 0.8f, this.accent());
+        skija.drawText((int)(curVol * 100.0f) + "%", (float)badgeVolX + (float)badgeW * 0.5f, (float)badgeVolY + (float)badgeH * 0.5f + 0.5f, 7.5f, this.accent(), true, 18);
         boolean hoverVol = this.isInside(mouseX, mouseY, slVolX - 4, slVolY - 5, slVolW + 8, 16);
-        nvg.drawSlider(slVolX, slVolY, slVolW, slVolH, curVol, this.accent(), hoverVol);
+        skija.drawSlider(slVolX, slVolY, slVolW, slVolH, curVol, this.accent(), hoverVol);
         int sec3Y = cy + 228;
-        nvg.drawText(DrawUtils.t("USER GUIDE & TAB MANUAL", "\u041f\u041e\u041b\u041d\u041e\u0415 \u0420\u0423\u041a\u041e\u0412\u041e\u0414\u0421\u0422\u0412\u041e \u041f\u041e \u0412\u041a\u041b\u0410\u0414\u041a\u0410\u041c"), sx + 12, sec3Y + 6, 8.5f, this.accent(), true, 17);
+        skija.drawText(DrawUtils.t("USER GUIDE & TAB MANUAL", "\u041f\u041e\u041b\u041d\u041e\u0415 \u0420\u0423\u041a\u041e\u0412\u041e\u0414\u0421\u0422\u0412\u041e \u041f\u041e \u0412\u041a\u041b\u0410\u0414\u041a\u0410\u041c"), sx + 12, sec3Y + 6, 8.5f, this.accent(), true, 17);
         String[][] guideItems = new String[][]{{"Webs / Apps", DrawUtils.t("Streaming", "\u0421\u0442\u0440\u0438\u043c\u0438\u043d\u0433"), DrawUtils.t("Stream music from Yandex Music, Spotify, browsers and Windows.", "\u041c\u0443\u0437\u044b\u043a\u0430 \u0438\u0437 \u042f\u043d\u0434\u0435\u043a\u0441 \u041c\u0443\u0437\u044b\u043a\u0438, Spotify, \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043e\u0432 \u0438 \u041f\u041a."), DrawUtils.t("Sync: Play/Pause, -10s/+10s seek, and volume control.", "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f: \u041f\u043b\u0435\u0439/\u041f\u0430\u0443\u0437\u0430, \u043f\u0435\u0440\u0435\u043c\u043e\u0442\u043a\u0430 -10/+10\u0441 \u0438 \u0437\u0432\u0443\u043a.")}, {DrawUtils.t("MP3 Player", "MP3 \u041f\u043b\u0435\u0435\u0440"), DrawUtils.t("Local Files", "\u041b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0435"), DrawUtils.t("Local tracks from .minecraft/mp3player folder (MP3 & WAV).", "\u041c\u0443\u0437\u044b\u043a\u0430 \u0438\u0437 \u043f\u0430\u043f\u043a\u0438 .minecraft/mp3player (MP3 \u0438 WAV)."), DrawUtils.t("Button 'DIR' opens folder, button 'R' refreshes the list.", "\u041a\u043d\u043e\u043f\u043a\u0430 'DIR' \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u043f\u0430\u043f\u043a\u0443, \u043a\u043d\u043e\u043f\u043a\u0430 'R' \u043e\u0431\u043d\u043e\u0432\u043b\u044f\u0435\u0442 \u0441\u043f\u0438\u0441\u043e\u043a.")}, {DrawUtils.t("Favorites", "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"), DrawUtils.t("Favorites", "\u041f\u043b\u0435\u0439\u043b\u0438\u0441\u0442"), DrawUtils.t("Quick access playlist for your most favorite music tracks.", "\u0411\u044b\u0441\u0442\u0440\u044b\u0439 \u043f\u043b\u0435\u0439\u043b\u0438\u0441\u0442 \u0434\u043b\u044f \u0432\u0430\u0448\u0438\u0445 \u0441\u0430\u043c\u044b\u0445 \u043b\u044e\u0431\u0438\u043c\u044b\u0445 \u043f\u0435\u0441\u0435\u043d."), DrawUtils.t("Click '...' next to any track and select heart to favorite.", "\u041d\u0430\u0436\u043c\u0438\u0442\u0435 '...' \u0443 \u043b\u044e\u0431\u043e\u0433\u043e \u0442\u0440\u0435\u043a\u0430 \u0438 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0435\u0440\u0434\u0435\u0447\u043a\u043e.")}, {DrawUtils.t("Add", "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c"), DrawUtils.t("In Browser", "\u0412 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435"), DrawUtils.t("Opens your browser with the song title and artist.", "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u0431\u0440\u0430\u0443\u0437\u0435\u0440 \u0441 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435\u043c \u0438 \u0430\u0432\u0442\u043e\u0440\u043e\u043c \u0438\u0433\u0440\u0430\u044e\u0449\u0435\u0439 \u043f\u0435\u0441\u043d\u0438."), DrawUtils.t("Quickly find and download your favorite tracks directly.", "\u041f\u043e\u0437\u0432\u043e\u043b\u044f\u0435\u0442 \u0431\u044b\u0441\u0442\u0440\u043e \u043d\u0430\u0439\u0442\u0438 \u0438 \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u043d\u0440\u0430\u0432\u0438\u0432\u0448\u0443\u044e\u0441\u044f \u043f\u0435\u0441\u043d\u044e.")}, {DrawUtils.t("3D Speaker", "3D \u041a\u043e\u043b\u043e\u043d\u043a\u0430"), DrawUtils.t("3D Spatial", "3D \u0417\u0432\u0443\u043a"), DrawUtils.t("Broadcasts 3D positional audio and floating hologram to all players.", "\u041f\u043e\u0437\u0438\u0446\u0438\u043e\u043d\u043d\u044b\u0439 3D-\u0437\u0432\u0443\u043a \u0432\u043e\u043a\u0440\u0443\u0433 \u0432\u0430\u0441 \u0438 \u0433\u043e\u043b\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043d\u0430\u0434 \u0433\u043e\u043b\u043e\u0432\u043e\u0439."), DrawUtils.t("Adjust hearing distance (8m to 64m) with range slider above.", "\u0414\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0441\u043b\u044b\u0448\u0438\u043c\u043e\u0441\u0442\u0438 (8-64\u043c) \u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u043f\u043e\u043b\u0437\u0443\u043d\u043a\u043e\u043c \u0432\u044b\u0448\u0435.")}, {DrawUtils.t("Vinyl Discs", "\u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0438"), DrawUtils.t("Vinyl Discs", "\u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0438"), DrawUtils.t("Burn any song onto music discs (Track menu '...' -> Disc).", "\u0417\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0439\u0442\u0435 \u043f\u0435\u0441\u043d\u0438 \u043d\u0430 \u043f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0438 (\u043c\u0435\u043d\u044e '...' -> \u041f\u043b\u0430\u0441\u0442\u0438\u043d\u043a\u0430)."), DrawUtils.t("Playing in jukebox renders rotating 3D vinyl and floating hologram!", "\u0412 \u043f\u0440\u043e\u0438\u0433\u0440\u044b\u0432\u0430\u0442\u0435\u043b\u0435 \u043a\u0440\u0443\u0442\u0438\u0442 3D-\u0434\u0438\u0441\u043a \u0438 \u043f\u0430\u0440\u0438\u0442 \u0433\u043e\u043b\u043e\u0433\u0440\u0430\u043c\u043c\u0430!")}, {"Dynamic Island", DrawUtils.t("Overlay HUD", "\u041e\u0432\u0435\u0440\u043b\u0435\u0439"), DrawUtils.t("Compact HUD overlay at screen top with cover, seconds, and equalizer.", "\u041e\u0432\u0435\u0440\u043b\u0435\u0439 \u0432\u0432\u0435\u0440\u0445\u0443 \u044d\u043a\u0440\u0430\u043d\u0430 \u0441 \u043e\u0431\u043b\u043e\u0436\u043a\u043e\u0439, \u0442\u0430\u0439\u043c\u0435\u0440\u043e\u043c \u0438 \u044d\u043a\u0432\u0430\u043b\u0430\u0439\u0437\u0435\u0440\u043e\u043c."), DrawUtils.t("Clickable directly in-game for instant playback controls.", "\u041a\u043b\u0438\u043a\u0430\u0431\u0435\u043b\u0435\u043d \u043f\u0440\u044f\u043c\u043e \u0432 \u0438\u0433\u0440\u0435 \u0434\u043b\u044f \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0431\u0435\u0437 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u043c\u0435\u043d\u044e.")}};
         int[] badgeColors = new int[]{-16739073, -13058568, -46226, -15681151, -19712, -5745161, -15817239};
         int card3Y = sec3Y + 18;
         int itemH = 44;
         int card3H = 4 + guideItems.length * itemH;
-        nvg.drawRoundedRect(cardX, card3Y, cardW, card3H, 8.0f, this.bgPanel());
-        nvg.drawRoundedRectOutline(cardX, card3Y, cardW, card3H, 8.0f, 0.8f, this.border());
+        skija.drawRoundedRect(cardX, card3Y, cardW, card3H, 8.0f, this.bgPanel());
+        skija.drawRoundedRectOutline(cardX, card3Y, cardW, card3H, 8.0f, 0.8f, this.border());
         float maxTextW = cardW - 20;
         for (int i = 0; i < guideItems.length; ++i) {
             String[] g = guideItems[i];
@@ -831,16 +842,16 @@ extends Screen {
             int gBadgeH = 15;
             int badgeItemX = cardX + 8;
             int badgeItemY = itemY + 3;
-            nvg.drawRoundedRect(badgeItemX, badgeItemY, gBadgeW, gBadgeH, 7.5f, bCol & 0xFFFFFF | 0x22000000);
-            nvg.drawRoundedRectOutline(badgeItemX, badgeItemY, gBadgeW, gBadgeH, 7.5f, 0.8f, bCol);
-            nvg.drawText(g[0], (float)badgeItemX + (float)gBadgeW * 0.5f, (float)badgeItemY + (float)gBadgeH * 0.5f + 0.5f, 7.5f, bCol, true, 18);
-            nvg.drawText(g[1], cardX + cardW - 10, itemY + 10, 7.0f, this.textSecondary(), false, 20);
-            nvg.drawBoundedText(g[2], cardX + 10, itemY + 22, 7.5f, this.textPrimary(), false, maxTextW);
-            nvg.drawBoundedText(g[3], cardX + 10, itemY + 33, 6.8f, this.textSecondary(), false, maxTextW);
+            skija.drawRoundedRect(badgeItemX, badgeItemY, gBadgeW, gBadgeH, 7.5f, bCol & 0xFFFFFF | 0x22000000);
+            skija.drawRoundedRectOutline(badgeItemX, badgeItemY, gBadgeW, gBadgeH, 7.5f, 0.8f, bCol);
+            skija.drawText(g[0], (float)badgeItemX + (float)gBadgeW * 0.5f, (float)badgeItemY + (float)gBadgeH * 0.5f + 0.5f, 7.5f, bCol, true, 18);
+            skija.drawText(g[1], cardX + cardW - 10, itemY + 10, 7.0f, this.textSecondary(), false, 20);
+            skija.drawBoundedText(g[2], cardX + 10, itemY + 22, 7.5f, this.textPrimary(), false, maxTextW);
+            skija.drawBoundedText(g[3], cardX + 10, itemY + 33, 6.8f, this.textSecondary(), false, maxTextW);
             if (i >= guideItems.length - 1) continue;
-            nvg.drawRoundedRect(cardX + 10, itemY + itemH - 1, cardW - 20, 0.5f, 0.25f, this.border());
+            skija.drawRoundedRect(cardX + 10, itemY + itemH - 1, cardW - 20, 0.5f, 0.25f, this.border());
         }
-        nvg.resetScissor();
+        skija.resetScissor();
         int totalContentH = card3Y + card3H + 16 - cy;
         this.maxSettingsScroll = Math.max(0, totalContentH - sh);
         this.settingsScroll = Math.max(0, Math.min(this.maxSettingsScroll, this.settingsScroll));
@@ -850,8 +861,8 @@ extends Screen {
             float scrollbarH = Math.max(24.0f, trackH * ((float)sh / (float)(sh + this.maxSettingsScroll)));
             float scrollbarY = (float)(sy + 5) + (trackH - scrollbarH) * scrollFrac;
             float scrollbarX = sx + sw - 6;
-            nvg.drawRoundedRect(scrollbarX, scrollbarY, 3.0f, scrollbarH, 1.5f, 0x66FFFFFF);
-            nvg.drawDropShadow(scrollbarX, scrollbarY, 3.0f, scrollbarH, 1.5f, 4.0f, 0.5f, 0x33000000);
+            skija.drawRoundedRect(scrollbarX, scrollbarY, 3.0f, scrollbarH, 1.5f, 0x66FFFFFF);
+            skija.drawDropShadow(scrollbarX, scrollbarY, 3.0f, scrollbarH, 1.5f, 4.0f, 0.5f, 0x33000000);
         }
     }
 
@@ -871,7 +882,7 @@ extends Screen {
         if (this.isInside(mx, my, pillThemeX, pillThemeY, pillThemeW, pillThemeH)) {
             this.playClickSound();
             darkTheme = !darkTheme;
-            NanoVGEngine.getInstance().setDarkTheme(darkTheme);
+            SkijaEngine.getInstance().setDarkTheme(darkTheme);
             ModConfig.getInstance().darkTheme = darkTheme;
             ModConfig.getInstance().save();
             return true;
@@ -1144,7 +1155,7 @@ extends Screen {
         int coverX = cardX + 8;
         int coverY = cardY + 8;
         if (hasTrack && this.gsmtc.hasCover()) {
-            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, coverX, coverY, coverSize, coverSize, 0.0f, 1.0f, 0.0f, 1.0f);
+            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, coverX, coverX + coverSize, coverY, coverY + coverSize, 0.0f, 1.0f, 0.0f, 1.0f);
         } else {
             ctx.fill(coverX, coverY, coverX + coverSize, coverY + coverSize, this.bgButton());
             ctx.centeredText(this.font, Component.literal("♪"), coverX + coverSize / 2, coverY + coverSize / 2 - 4, this.accent());
@@ -1593,7 +1604,7 @@ extends Screen {
         if (this.isInside(mouseX, mouseY, px + 8, py + 6, 22, 18)) {
             this.playClickSound();
             darkTheme = !darkTheme;
-            NanoVGEngine.getInstance().setDarkTheme(darkTheme);
+            SkijaEngine.getInstance().setDarkTheme(darkTheme);
             ModConfig.getInstance().darkTheme = darkTheme;
             ModConfig.getInstance().save();
             return true;

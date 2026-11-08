@@ -110,7 +110,7 @@ extends Screen {
                 }
                 PlayerSkin skinTextures = player.getSkin();
                 if (skinTextures != null && skinTextures.body() != null) {
-                    context.blit(skinTextures.body().texturePath(), x + 5, y + 5, 16, 16, 0.125f, 0.25f, 0.125f, 0.25f);
+                    context.blit(skinTextures.body().texturePath(), x + 5, x + 21, y + 5, y + 21, 0.125f, 0.25f, 0.125f, 0.25f);
                 }
                 DrawUtils.drawText(context, this.font, name, x + 30, y + 9, -1, false);
                 DrawUtils.drawText(context, this.font, DrawUtils.t("Share track", "\u041f\u043e\u0434\u0435\u043b\u0438\u0442\u044c\u0441\u044f \u0442\u0440\u0435\u043a\u043e\u043c"), x + 155, y + 9, hover ? -13312 : -7829368, false);

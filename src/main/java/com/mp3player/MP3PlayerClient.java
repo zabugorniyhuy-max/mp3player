@@ -56,7 +56,7 @@ import com.mp3player.client.config.ModConfig;
 import com.mp3player.client.gsmtc.GsmtcHudOverlay;
 import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.ShareRequestScreen;
-import com.mp3player.client.gui.nanovg.NanoVGEngine;
+import com.mp3player.client.gui.skija.SkijaEngine;
 import com.mp3player.client.network.FileReceiverManager;
 import com.mp3player.client.network.FileSenderManager;
 import com.mp3player.network.FileTransferChunkPayload;
@@ -368,9 +368,9 @@ implements ClientModInitializer {
                 LOGGER.warn("[MP3Player] Error shutting down GsmtcManager: {}", t.getMessage());
             }
             try {
-                NanoVGEngine.getInstance().destroy();
+                SkijaEngine.getInstance().destroy();
             } catch (Throwable t) {
-                LOGGER.warn("[MP3Player] Error destroying NanoVGEngine: {}", t.getMessage());
+                LOGGER.warn("[MP3Player] Error destroying SkijaEngine: {}", t.getMessage());
             }
             LOGGER.info("[MP3Player] Cleanup completed successfully.");
         });

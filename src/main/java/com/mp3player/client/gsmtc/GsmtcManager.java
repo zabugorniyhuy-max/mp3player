@@ -15,7 +15,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mp3player.client.audio.MusicPlayer;
 import com.mp3player.client.gsmtc.GsmtcBridge;
 import com.mp3player.client.gsmtc.GsmtcLoader;
-import com.mp3player.client.gui.nanovg.NanoVGEngine;
+import com.mp3player.client.gui.skija.SkijaEngine;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
@@ -222,7 +222,7 @@ public class GsmtcManager {
             return;
         }
         this.currentCoverBytes = bytes;
-        NanoVGEngine.getInstance().updateGsmtcCoverImage(bytes);
+        SkijaEngine.getInstance().updateGsmtcCoverImage(bytes);
         try {
             Minecraft client = Minecraft.getInstance();
             if (client != null && !this.isShutdown) {
@@ -279,7 +279,7 @@ public class GsmtcManager {
 
     private void clearTexture() {
         this.currentCoverBytes = null;
-        NanoVGEngine.getInstance().updateGsmtcCoverImage(null);
+        SkijaEngine.getInstance().updateGsmtcCoverImage(null);
         Minecraft.getInstance().execute(() -> {
             if (this.coverTexture != null) {
                 this.coverTexture.close();

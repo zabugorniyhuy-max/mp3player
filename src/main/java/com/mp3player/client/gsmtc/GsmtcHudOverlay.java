@@ -19,7 +19,7 @@ import com.mp3player.client.audio.MusicPlayer;
 import com.mp3player.client.config.ModConfig;
 import com.mp3player.client.gsmtc.GsmtcManager;
 import com.mp3player.client.gui.MainScreen;
-import com.mp3player.client.gui.nanovg.NanoVGEngine;
+import com.mp3player.client.gui.skija.SkijaEngine;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -88,7 +88,12 @@ public class GsmtcHudOverlay {
             return;
         }
         boolean hasGsmtc = isGsmtcPlaying || manager.isAvailable() && manager.hasTrack() && !isLocalPlaying;
-        GsmtcHudOverlay.renderActiveCapsule(ctx, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
+        SkijaEngine skija = SkijaEngine.getInstance();
+        if (skija.isAvailable()) {
+            GsmtcHudOverlay.renderActiveCapsuleSkija(skija, ctx, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
+        } else {
+            GsmtcHudOverlay.renderActiveCapsule(ctx, manager, local, hasGsmtc, screenW, screenH, mouseX, mouseY);
+        }
     }
 
     private static int getGsmtcCoverGlId() {
@@ -117,7 +122,7 @@ public class GsmtcHudOverlay {
         return -1;
     }
 
-    private static void renderActiveCapsuleNanoVG(NanoVGEngine nvg, GsmtcManager manager, MusicPlayer local, boolean hasGsmtc, int screenW, int screenH, double mouseX, double mouseY) {
+    private static void renderActiveCapsuleSkija(SkijaEngine skija, GuiGraphicsExtractor ctx, GsmtcManager manager, MusicPlayer local, boolean hasGsmtc, int screenW, int screenH, double mouseX, double mouseY) {
         int dot;
         String title;
         int borderColor;
@@ -132,13 +137,13 @@ public class GsmtcHudOverlay {
         boolean isHovered = GsmtcHudOverlay.isInside(mouseX, mouseY, x, y, pillW, pillH);
         String app = hasGsmtc ? manager.getSourceApp().toLowerCase() : "";
         boolean speaker = ModConfig.getInstance().speakerMode;
-        int n = borderColor = speaker ? -13312 : -13058568;
-        String sourceLabel = speaker ? (hasGsmtc ? (app.contains("yandex") || app.contains("\u044f\u043d\u0434\u0435\u043a\u0441") ? "\u041a\u043e\u043b\u043e\u043d\u043a\u0430 \u2022 \u042f.\u041c\u0443\u0437\u044b\u043a\u0430" : (app.contains("spotify") || app.contains("\u0441\u043f\u043e\u0442\u0438\u0444\u0430\u0439") ? "\u041a\u043e\u043b\u043e\u043d\u043a\u0430 \u2022 Spotify" : "\u041a\u043e\u043b\u043e\u043d\u043a\u0430 \u2022 Web")) : "\u041a\u043e\u043b\u043e\u043d\u043a\u0430") : (hasGsmtc ? (app.contains("yandex") || app.contains("\u044f\u043d\u0434\u0435\u043a\u0441") ? "\u042f\u043d\u0434\u0435\u043a\u0441.\u041c\u0443\u0437\u044b\u043a\u0430" : (app.contains("spotify") || app.contains("\u0441\u043f\u043e\u0442\u0438\u0444\u0430\u0439") ? "Spotify" : "Web / App")) : "MP3 \u041f\u043b\u0435\u0435\u0440");
-        String string = title = hasGsmtc ? manager.getTitle() : local.getCurrentTrackName();
+        borderColor = speaker ? 0xFFFFCC00 : 0xFF388BFD;
+        String sourceLabel = speaker ? (hasGsmtc ? (app.contains("yandex") || app.contains("яндекс") ? "Колонка • Я.Музыка" : (app.contains("spotify") || app.contains("спотифай") ? "Колонка • Spotify" : "Колонка • Web")) : "Колонка") : (hasGsmtc ? (app.contains("yandex") || app.contains("яндекс") ? "Яндекс.Музыка" : (app.contains("spotify") || app.contains("спотифай") ? "Spotify" : "Web / App")) : "MP3 Плеер");
+        title = hasGsmtc ? manager.getTitle() : local.getCurrentTrackName();
         if (title == null || title.isEmpty()) {
-            title = "\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f";
+            title = "Без названия";
         }
-        if ((dot = title.lastIndexOf(46)) > 0 && !hasGsmtc) {
+        if ((dot = title.lastIndexOf('.')) > 0 && !hasGsmtc) {
             title = title.substring(0, dot);
         }
         String artist = hasGsmtc ? manager.getArtist() : "";
@@ -150,89 +155,78 @@ public class GsmtcHudOverlay {
         } else if (local.getDuration() > 0L) {
             progress = Math.max(0.0, Math.min(1.0, (double)local.getCurrentPosition() / (double)local.getDuration()));
         }
-        int bg = isHovered ? -233433054 : -301068265;
-        nvg.drawDropShadow(x, y, pillW, pillH, 12.0f, 10.0f, 1.0f, borderColor & 0x44FFFFFF);
-        nvg.drawRoundedRect(x, y, pillW, pillH, 12.0f, bg);
-        nvg.drawRoundedRectOutline(x, y, pillW, pillH, 12.0f, 1.0f, borderColor);
-        int coverGlId;
-        if (hasGsmtc) {
-            coverGlId = manager.hasCover() ? GsmtcHudOverlay.getGsmtcCoverGlId() : -1;
-            nvg.drawGsmtcCover(coverGlId, (float)x + 3.5f, (float)y + 3.5f, 17.0f, 4.0f);
-        } else {
-            coverGlId = GsmtcHudOverlay.getLocalCoverGlId();
-            nvg.drawLocalCover(coverGlId, (float)x + 3.5f, (float)y + 3.5f, 17.0f, 4.0f);
-        }
-        float textX = (float)x + 24.0f;
+        int bg = isHovered ? 0xE614141E : 0xCC101018;
+
+        int frameW = pillW + 16;
+        int frameH = pillH + 16;
+        skija.beginFrame(frameW, frameH);
+
+        float px = 8f;
+        float py = 6f;
+        skija.drawDropShadow(px, py, pillW, pillH, 12f, 10f, 1f, borderColor & 0x44FFFFFF);
+        skija.drawRoundedRect(px, py, pillW, pillH, 12f, bg);
+        skija.drawRoundedRectOutline(px, py, pillW, pillH, 12f, 1.2f, borderColor);
+
+        byte[] coverBytes = hasGsmtc ? manager.getCoverBytes() : skija.getLocalCoverBytes();
+        skija.drawCover(coverBytes, px + 3.5f, py + 3.5f, 17f, 17f, 4f);
+
+        float textX = px + 24f;
         int btnRadius = 8;
         int btnX = x + pillW - 13;
         int btnY = y + 12;
         lastBtnX = btnX;
         lastBtnY = btnY;
         lastBtnRadius = btnRadius;
-        int barsX = btnX - 28;
-        int timeX = barsX - 5;
+        float localBtnX = px + pillW - 13f;
+        float localBtnY = py + 12f;
+
+        float barsX = localBtnX - 28f;
+        float timeX = barsX - 5f;
         long posSec = hasGsmtc ? (long)manager.getPosition() : local.getCurrentPosition() / 1000000L;
         String timeStr = GsmtcHudOverlay.formatTime(posSec);
-        float timeW = nvg.getTextWidth(timeStr, 8.5f, true);
-        float maxTitleW = (float)timeX - timeW - 5.0f - textX;
-        Object displayTitle = title;
-        if (nvg.getTextWidth((String)displayTitle, 10.0f, true) > maxTitleW) {
-            while (((String)displayTitle).length() > 3 && nvg.getTextWidth((String)displayTitle + "..", 10.0f, true) > maxTitleW) {
-                displayTitle = ((String)displayTitle).substring(0, ((String)displayTitle).length() - 1);
+
+        float timeW = skija.getTextWidth(timeStr, 8.5f, true);
+        float maxTitleW = timeX - timeW - 5f - textX;
+        String displayTitle = title;
+        if (skija.getTextWidth(displayTitle, 10f, true) > maxTitleW) {
+            while (displayTitle.length() > 3 && skija.getTextWidth(displayTitle + "..", 10f, true) > maxTitleW) {
+                displayTitle = displayTitle.substring(0, displayTitle.length() - 1);
             }
-            displayTitle = (String)displayTitle + "..";
+            displayTitle = displayTitle + "..";
         }
-        nvg.drawText((String)displayTitle, textX, (float)y + 9.5f, 10.0f, -1, true, 17);
-        Object displaySub = subText;
-        if (nvg.getTextWidth((String)displaySub, 8.0f, false) > maxTitleW) {
-            while (((String)displaySub).length() > 3 && nvg.getTextWidth((String)displaySub + "..", 8.0f, false) > maxTitleW) {
-                displaySub = ((String)displaySub).substring(0, ((String)displaySub).length() - 1);
+        skija.drawText(displayTitle, textX, py + 10f, 10f, 0xFFFFFFFF, true);
+
+        String displaySub = subText;
+        if (skija.getTextWidth(displaySub, 8f, false) > maxTitleW) {
+            while (displaySub.length() > 3 && skija.getTextWidth(displaySub + "..", 8f, false) > maxTitleW) {
+                displaySub = displaySub.substring(0, displaySub.length() - 1);
             }
-            displaySub = (String)displaySub + "..";
+            displaySub = displaySub + "..";
         }
-        nvg.drawText((String)displaySub, textX, (float)y + 17.0f, 8.0f, -6249035, false, 17);
-        nvg.drawText(timeStr, timeX, (float)y + 12.0f, 8.5f, -3354404, true, 20);
+        skija.drawText(displaySub, textX, py + 17.5f, 8f, 0xFFA0A0B0, false);
+        skija.drawText(timeStr, timeX - timeW, py + 12.5f, 8.5f, 0xFFCCCCCC, true);
+
         if (isPlaying) {
-            nvg.drawEqualizerBars(barsX, y + 7, 10.0f, 10.0f, borderColor, System.currentTimeMillis());
+            skija.drawEqualizerBars(barsX, py + 7f, 10f, 10f, borderColor, System.currentTimeMillis());
         } else {
             for (int i = 0; i < 4; ++i) {
-                nvg.drawRoundedRect((float)barsX + (float)i * 2.8f, (float)y + 14.5f, 1.6f, 2.5f, 0.8f, 0x44FFFFFF);
+                skija.drawRoundedRect(barsX + (float)i * 2.8f, py + 14.5f, 1.6f, 2.5f, 0.8f, 0x44FFFFFF);
             }
         }
-        boolean hoverBtn = GsmtcHudOverlay.isInsideCircle(mouseX, mouseY, btnX, btnY, btnRadius + 3);
-        nvg.drawPlayPauseButton(btnX, btnY, 7.5f, isPlaying, hoverBtn, borderColor);
-        float barX = textX;
-        float barW = (float)pillW - 46.0f;
-        float barY = (float)(y + pillH) - 2.5f;
-        lastBarX = (int)barX;
-        lastBarY = (int)barY;
-        lastBarW = (int)barW;
-        nvg.drawProgressBar(barX, barY, barW, 2.0f, (float)progress, false, borderColor);
-    }
 
-    private static void renderStandbyCapsuleNanoVG(NanoVGEngine nvg, int screenW, int screenH, double mouseX, double mouseY) {
-        int pillW = 145;
-        int pillH = 22;
-        int x = (screenW - pillW) / 2;
-        int y = 8;
-        lastPillX = x;
-        lastPillY = y;
-        lastPillW = pillW;
-        lastPillH = pillH;
-        boolean isHovered = GsmtcHudOverlay.isInside(mouseX, mouseY, x, y, pillW, pillH);
-        int bg = isHovered ? -233433054 : -586149352;
-        int border = isHovered ? 0x66FFFFFF : 0x33FFFFFF;
-        nvg.drawRoundedRect(x, y, pillW, pillH, 11.0f, bg);
-        nvg.drawRoundedRectOutline(x, y, pillW, pillH, 11.0f, 1.0f, border);
-        nvg.drawLocalCover(-1, (float)x + 3.5f, (float)y + 3.5f, 15.0f, 3.5f);
-        nvg.drawText("MP3 Player \u00b7 [P]", (float)x + 23.0f, (float)y + 11.0f, 9.5f, -3354404, true, 17);
-        int btnX = x + pillW - 12;
-        int btnY = y + 11;
-        lastBtnX = btnX;
-        lastBtnY = btnY;
-        lastBtnRadius = 7;
-        boolean hoverBtn = GsmtcHudOverlay.isInsideCircle(mouseX, mouseY, btnX, btnY, 10);
-        nvg.drawPlayPauseButton(btnX, btnY, 6.5f, false, hoverBtn, -16739073);
+        boolean hoverBtn = GsmtcHudOverlay.isInsideCircle(mouseX, mouseY, btnX, btnY, btnRadius + 3);
+        skija.drawPlayPauseButton(localBtnX, localBtnY, 7.5f, isPlaying, hoverBtn, borderColor);
+
+        float barX = textX;
+        float barW = (float)pillW - 46f;
+        float barY = py + pillH - 2.5f;
+        lastBarX = (int)(x + (textX - px));
+        lastBarY = (int)(y + pillH - 2.5f);
+        lastBarW = (int)barW;
+        skija.drawSlider(barX, barY, barW, 2.5f, (float)progress, borderColor, 0x33FFFFFF, borderColor);
+
+        skija.endFrame();
+        skija.renderToContext(ctx, x - 8, y - 6, frameW, frameH);
     }
 
     private static String formatTime(long seconds) {
@@ -266,7 +260,7 @@ public class GsmtcHudOverlay {
         int artY = y + 4;
         boolean bl = hasCover = hasGsmtc && manager.hasCover();
         if (hasCover) {
-            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, artX, artY, artSize, artSize, 0.0f, 1.0f, 0.0f, 1.0f);
+            ctx.blit(GsmtcManager.COVER_TEXTURE_ID, artX, artX + artSize, artY, artY + artSize, 0.0f, 1.0f, 0.0f, 1.0f);
             GsmtcHudOverlay.drawCircleOutline(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, 0x44FFFFFF);
         } else {
             GsmtcHudOverlay.drawCircle(ctx, artX + artSize / 2, artY + artSize / 2, artSize / 2, -14934748);

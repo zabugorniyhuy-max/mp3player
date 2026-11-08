@@ -11,7 +11,7 @@
 package com.mp3player.client.audio;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mp3player.client.gui.nanovg.NanoVGEngine;
+import com.mp3player.client.gui.skija.SkijaEngine;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -32,7 +32,7 @@ public class AlbumArtExtractor {
     public static void loadCoverForFile(File file, String trackTitle, String trackArtist) {
         new Thread(() -> {
             try {
-                NanoVGEngine.getInstance().updateLocalCoverImage(null);
+                SkijaEngine.getInstance().updateLocalCoverImage(null);
                 byte[] imgBytes = null;
                 if (file != null && file.exists() && (imgBytes = AlbumArtExtractor.extractEmbeddedCover(file)) == null && file.getParentFile() != null) {
                     File[] searchDirs;
@@ -64,7 +64,7 @@ public class AlbumArtExtractor {
                 }
                 if (imgBytes != null && imgBytes.length > 0) {
                     byte[] b = imgBytes;
-                    NanoVGEngine.getInstance().updateLocalCoverImage(b);
+                    SkijaEngine.getInstance().updateLocalCoverImage(b);
                     Minecraft.getInstance().execute(() -> {
                         try {
                             NativeImage img = NativeImage.read((InputStream)new ByteArrayInputStream(b));
@@ -120,7 +120,7 @@ public class AlbumArtExtractor {
                     imgConn.setConnectTimeout(4000);
                     imgConn.setReadTimeout(4000);
                     if (imgConn.getResponseCode() == 200 && (bytes = imgConn.getInputStream().readAllBytes()) != null && bytes.length > 0) {
-                        NanoVGEngine.getInstance().updateLocalCoverImage(bytes);
+                        SkijaEngine.getInstance().updateLocalCoverImage(bytes);
                         Minecraft.getInstance().execute(() -> {
                             try {
                                 NativeImage img = NativeImage.read((InputStream)new ByteArrayInputStream(bytes));
