@@ -76,6 +76,20 @@ extends Screen {
     private int trackMenuY = 0;
     private final long openedTimeMs = System.currentTimeMillis();
 
+    private long lastSkijaRenderTime = 0L;
+    private int lastRenderMouseX = -9999;
+    private int lastRenderMouseY = -9999;
+    private int lastRenderPanelX = -9999;
+    private int lastRenderPanelY = -9999;
+    private int lastRenderTab = -1;
+    private boolean lastRenderDarkTheme = true;
+    private boolean lastRenderPlaying = false;
+    private long lastRenderPosSec = -1L;
+    private String lastRenderTitle = "";
+    private int lastTrackMenuIndex = -1;
+    private boolean skijaTextureReady = false;
+    private boolean forceSkijaRedraw = true;
+
     public MainScreen() {
         super((Component)Component.literal((String)"Music Player"));
         darkTheme = ModConfig.getInstance().darkTheme;
@@ -96,6 +110,8 @@ extends Screen {
     @Override
     protected void init() {
         super.init();
+        this.skijaTextureReady = false;
+        this.forceSkijaRedraw = true;
         com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] init() called: width=" + this.width + ", height=" + this.height);
     }
 
@@ -216,9 +232,53 @@ extends Screen {
             int boundsW = panelW + pad * 2;
             int boundsH = panelH + 28 + pad;
 
-            skija.beginFrame(boundsW, boundsH, guiScale, -originX, -originY);
-            this.renderScreenSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
-            skija.endFrame();
+            long now = System.currentTimeMillis();
+            boolean isGsmtc = this.currentTab == 0 && this.gsmtc.isAvailable() && this.gsmtc.hasTrack();
+            boolean isPlaying = isGsmtc ? this.gsmtc.isPlaying() : this.localPlayer.isPlaying();
+            long posSec = isGsmtc ? (long) this.gsmtc.getPosition() : this.localPlayer.getCurrentPosition() / 1000000L;
+            String curTitle = isGsmtc ? this.gsmtc.getTitle() : this.localPlayer.getCurrentTrackName();
+            if (curTitle == null) curTitle = "";
+
+            boolean mouseMoved = (mouseX != this.lastRenderMouseX || mouseY != this.lastRenderMouseY);
+            boolean panelMoved = (panelX != this.lastRenderPanelX || panelY != this.lastRenderPanelY);
+            boolean isAnimating = this.animationProgress < 1.0f || this.isClosing;
+            boolean isDragging = this.draggingProgress || this.draggingVolume || this.draggingRange || this.draggingGsmtcSeek || this.draggingGsmtcVolume;
+
+            boolean stateChanged = this.forceSkijaRedraw
+                    || !this.skijaTextureReady
+                    || mouseMoved
+                    || panelMoved
+                    || this.currentTab != this.lastRenderTab
+                    || darkTheme != this.lastRenderDarkTheme
+                    || isPlaying != this.lastRenderPlaying
+                    || posSec != this.lastRenderPosSec
+                    || !curTitle.equals(this.lastRenderTitle)
+                    || this.trackMenuIndex != this.lastTrackMenuIndex
+                    || isAnimating
+                    || isDragging;
+
+            boolean canRender = (now - this.lastSkijaRenderTime) >= 14L || !this.skijaTextureReady || this.forceSkijaRedraw;
+
+            if (stateChanged && canRender) {
+                this.forceSkijaRedraw = false;
+                this.lastSkijaRenderTime = now;
+                this.lastRenderMouseX = mouseX;
+                this.lastRenderMouseY = mouseY;
+                this.lastRenderPanelX = panelX;
+                this.lastRenderPanelY = panelY;
+                this.lastRenderTab = this.currentTab;
+                this.lastRenderDarkTheme = darkTheme;
+                this.lastRenderPlaying = isPlaying;
+                this.lastRenderPosSec = posSec;
+                this.lastRenderTitle = curTitle;
+                this.lastTrackMenuIndex = this.trackMenuIndex;
+
+                skija.beginFrame(boundsW, boundsH, guiScale, -originX, -originY);
+                this.renderScreenSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
+                skija.endFrame();
+                this.skijaTextureReady = true;
+            }
+
             skija.renderToContext(context, originX, originY, boundsW, boundsH);
             super.extractRenderState(context, mouseX, mouseY, delta);
             return;
@@ -1560,6 +1620,7 @@ extends Screen {
 
     @Override
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent click, boolean bl) {
+        this.forceSkijaRedraw = true;
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -1888,6 +1949,7 @@ extends Screen {
 
     @Override
     public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent click) {
+        this.forceSkijaRedraw = true;
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -1920,6 +1982,7 @@ extends Screen {
 
     @Override
     public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent click, double deltaX, double deltaY) {
+        this.forceSkijaRedraw = true;
         double mouseX = click.x();
         double mouseY = click.y();
         int button = click.button();
@@ -2006,6 +2069,7 @@ extends Screen {
     }
 
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        this.forceSkijaRedraw = true;
         if (this.currentTab == 1) {
             int max = Math.max(0, this.localPlayer.getPlaylist().size() - 4);
             this.localTrackScroll = Math.max(0, Math.min(max, this.localTrackScroll - (int)verticalAmount));
@@ -2020,6 +2084,7 @@ extends Screen {
 
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent input) {
+        this.forceSkijaRedraw = true;
         int keyCode = input.key();
         if (keyCode == 256) {
             this.startClosing();

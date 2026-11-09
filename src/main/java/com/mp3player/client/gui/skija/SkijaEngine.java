@@ -82,11 +82,10 @@ public class SkijaEngine {
     private final Paint shadowPaint = new Paint();
     private final Paint imagePaint = new Paint();
 
-    // Caches to avoid recreating fonts and blur mask filters every frame
+    // Caches to avoid recreating fonts every frame
     private final java.util.Map<Integer, Font> regularFontCache = new java.util.HashMap<>();
     private final java.util.Map<Integer, Font> boldFontCache = new java.util.HashMap<>();
     private final java.util.Map<Integer, Font> iconFontCache = new java.util.HashMap<>();
-    private final java.util.Map<Integer, MaskFilter> blurFilterCache = new java.util.HashMap<>();
 
     private volatile byte[] gsmtcCoverBytes;
     private volatile byte[] localCoverBytes;
@@ -110,6 +109,8 @@ public class SkijaEngine {
             this.fillPaint.setAntiAlias(true);
             this.strokePaint.setAntiAlias(true);
             this.strokePaint.setMode(PaintMode.STROKE);
+            this.shadowPaint.setAntiAlias(true);
+            this.shadowPaint.setMode(PaintMode.FILL);
             this.textPaint.setAntiAlias(true);
             this.imagePaint.setAntiAlias(true);
             loadFonts();
@@ -133,17 +134,6 @@ public class SkijaEngine {
             cache.put(key, f);
         }
         return f;
-    }
-
-    private MaskFilter getBlurFilter(float radius) {
-        if (radius <= 0.01f) return null;
-        int key = Math.round(radius * 10f);
-        MaskFilter mf = blurFilterCache.get(key);
-        if (mf == null) {
-            mf = MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius);
-            blurFilterCache.put(key, mf);
-        }
-        return mf;
     }
 
     private void loadFonts() {
@@ -406,12 +396,51 @@ public class SkijaEngine {
     }
 
     public void drawDropShadow(float x, float y, float w, float h, float radius, float blur, float spread, int color) {
-        if (this.canvas == null || blur <= 0) return;
-        shadowPaint.setColor(color);
-        MaskFilter mf = getBlurFilter(blur / 2f);
-        shadowPaint.setMaskFilter(mf);
-        this.canvas.drawRRect(RRect.makeXYWH(x - spread, y - spread + 2f, w + spread * 2f, h + spread * 2f, radius), shadowPaint);
-        shadowPaint.setMaskFilter(null);
+        if (this.canvas == null || blur <= 0f || ((color >>> 24) == 0)) return;
+
+        int alpha = (color >>> 24) & 0xFF;
+        int rgb = color & 0x00FFFFFF;
+
+        // Ultra-fast multi-layer analytic soft shadow without CPU Gaussian convolution.
+        // Replaces CPU software MaskFilter blur which was taking ~150ms per frame.
+        float totalSpread = spread + blur * 0.7f;
+        float yOffset = Math.max(1.0f, blur * 0.18f);
+
+        // Layer 4 (Outer ambient halo - soft 12% opacity)
+        int a4 = (int) (alpha * 0.12f);
+        if (a4 > 0) {
+            shadowPaint.setColor((a4 << 24) | rgb);
+            float ext = totalSpread;
+            float r = Math.max(0f, radius + ext * 0.75f);
+            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
+        }
+
+        // Layer 3 (Penumbra - 22% opacity)
+        int a3 = (int) (alpha * 0.22f);
+        if (a3 > 0) {
+            shadowPaint.setColor((a3 << 24) | rgb);
+            float ext = totalSpread * 0.65f;
+            float r = Math.max(0f, radius + ext * 0.55f);
+            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
+        }
+
+        // Layer 2 (Umbra - 36% opacity)
+        int a2 = (int) (alpha * 0.36f);
+        if (a2 > 0) {
+            shadowPaint.setColor((a2 << 24) | rgb);
+            float ext = totalSpread * 0.35f;
+            float r = Math.max(0f, radius + ext * 0.35f);
+            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
+        }
+
+        // Layer 1 (Contact core - 52% opacity)
+        int a1 = (int) (alpha * 0.52f);
+        if (a1 > 0) {
+            shadowPaint.setColor((a1 << 24) | rgb);
+            float ext = totalSpread * 0.12f;
+            float r = Math.max(0f, radius + ext * 0.15f);
+            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
+        }
     }
 
     public void drawGradientRect(float x, float y, float w, float h, float radius, int topColor, int bottomColor) {
@@ -930,7 +959,7 @@ public class SkijaEngine {
                 this.canvas.clipRRect(RRect.makeXYWH(x, y, w, h, radius), true);
                 Rect src = Rect.makeWH(img.getWidth(), img.getHeight());
                 Rect dst = Rect.makeXYWH(x, y, w, h);
-                this.canvas.drawImageRect(img, src, dst, SamplingMode.CATMULL_ROM, null, true);
+                this.canvas.drawImageRect(img, src, dst, SamplingMode.LINEAR, null, true);
                 this.canvas.restore();
                 if (imageBytes != this.gsmtcCoverBytes && imageBytes != this.localCoverBytes) {
                     img.close();
@@ -1062,10 +1091,6 @@ public class SkijaEngine {
             try { f.close(); } catch (Throwable ignored) {}
         }
         iconFontCache.clear();
-        for (MaskFilter mf : blurFilterCache.values()) {
-            try { mf.close(); } catch (Throwable ignored) {}
-        }
-        blurFilterCache.clear();
 
         try { fillPaint.close(); } catch (Throwable ignored) {}
         try { strokePaint.close(); } catch (Throwable ignored) {}
