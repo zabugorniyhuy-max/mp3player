@@ -196,106 +196,109 @@ public class GsmtcHudOverlay {
                 || Math.abs(guiScale - lastHudScale) > 0.01f;
 
         boolean inMainScreen = Minecraft.getInstance().gui != null && Minecraft.getInstance().gui.screen() instanceof MainScreen;
-        boolean isGpu = skija.isGpuMode();
         boolean needRedraw;
         if (inMainScreen && hudTextureReady) {
             needRedraw = false;
-        } else if (!hudTextureReady || stateChanged || isGpu) {
+        } else if (!hudTextureReady || stateChanged) {
             needRedraw = true;
-        } else if (isPlaying) {
-            // Smooth 60 FPS update for animated equalizer wave while playing
-            needRedraw = (now - lastHudRenderTime) >= 16L;
         } else {
-            // Paused with no state change: skip redraw and re-use existing texture directly!
             needRedraw = false;
         }
 
-        if (!needRedraw) {
-            skija.renderHudToContext(ctx, x - 8, y - 6, frameW, frameH);
-            return;
-        }
+        if (needRedraw) {
+            skija.beginHudFrame(frameW, frameH, guiScale);
 
-        skija.beginHudFrame(frameW, frameH, guiScale);
+            float px = 8f;
+            float py = 6f;
+            skija.drawDropShadow(px, py, pillW, pillH, 12f, 10f, 1f, borderColor & 0x44FFFFFF);
+            skija.drawRoundedRect(px, py, pillW, pillH, 12f, bg);
+            skija.drawRoundedRectOutline(px, py, pillW, pillH, 12f, 1.2f, borderColor);
 
-        float px = 8f;
-        float py = 6f;
-        skija.drawDropShadow(px, py, pillW, pillH, 12f, 10f, 1f, borderColor & 0x44FFFFFF);
-        skija.drawRoundedRect(px, py, pillW, pillH, 12f, bg);
-        skija.drawRoundedRectOutline(px, py, pillW, pillH, 12f, 1.2f, borderColor);
+            skija.drawCover(coverBytes, px + 3.5f, py + 3.5f, 17f, 17f, 4f);
 
-        skija.drawCover(coverBytes, px + 3.5f, py + 3.5f, 17f, 17f, 4f);
+            float textX = px + 24f;
+            float localBtnX = px + pillW - 13f;
+            float localBtnY = py + 12f;
 
-        float textX = px + 24f;
-        float localBtnX = px + pillW - 13f;
-        float localBtnY = py + 12f;
+            float barsX = localBtnX - 28f;
+            float timeX = barsX - 5f;
+            String timeStr = GsmtcHudOverlay.formatTime(posSec);
 
-        float barsX = localBtnX - 28f;
-        float timeX = barsX - 5f;
-        String timeStr = GsmtcHudOverlay.formatTime(posSec);
-
-        float timeW = skija.getTextWidth(timeStr, 8.5f, true);
-        float maxTitleW = timeX - timeW - 5f - textX;
-        String displayTitle = title;
-        float titleW = skija.getTextWidth(displayTitle, 10f, true);
-        if (titleW > maxTitleW) {
-            int est = (int) Math.max(1, displayTitle.length() * (maxTitleW / titleW));
-            displayTitle = displayTitle.substring(0, Math.min(displayTitle.length(), est));
-            while (displayTitle.length() > 1 && skija.getTextWidth(displayTitle + "..", 10f, true) > maxTitleW) {
-                displayTitle = displayTitle.substring(0, displayTitle.length() - 1);
+            float timeW = skija.getTextWidth(timeStr, 8.5f, true);
+            float maxTitleW = timeX - timeW - 5f - textX;
+            String displayTitle = title;
+            float titleW = skija.getTextWidth(displayTitle, 10f, true);
+            if (titleW > maxTitleW) {
+                int est = (int) Math.max(1, displayTitle.length() * (maxTitleW / titleW));
+                displayTitle = displayTitle.substring(0, Math.min(displayTitle.length(), est));
+                while (displayTitle.length() > 1 && skija.getTextWidth(displayTitle + "..", 10f, true) > maxTitleW) {
+                    displayTitle = displayTitle.substring(0, displayTitle.length() - 1);
+                }
+                displayTitle = displayTitle + "..";
             }
-            displayTitle = displayTitle + "..";
-        }
-        skija.drawText(displayTitle, textX, py + 8.5f, 10f, 0xFFFFFFFF, true, SkijaEngine.ALIGN_LEFT);
+            skija.drawText(displayTitle, textX, py + 8.5f, 10f, 0xFFFFFFFF, true, SkijaEngine.ALIGN_LEFT);
 
-        String displaySub = subText;
-        float subW = skija.getTextWidth(displaySub, 8f, false);
-        if (subW > maxTitleW) {
-            int est = (int) Math.max(1, displaySub.length() * (maxTitleW / subW));
-            displaySub = displaySub.substring(0, Math.min(displaySub.length(), est));
-            while (displaySub.length() > 1 && skija.getTextWidth(displaySub + "..", 8f, false) > maxTitleW) {
-                displaySub = displaySub.substring(0, displaySub.length() - 1);
+            String displaySub = subText;
+            float subW = skija.getTextWidth(displaySub, 8f, false);
+            if (subW > maxTitleW) {
+                int est = (int) Math.max(1, displaySub.length() * (maxTitleW / subW));
+                displaySub = displaySub.substring(0, Math.min(displaySub.length(), est));
+                while (displaySub.length() > 1 && skija.getTextWidth(displaySub + "..", 8f, false) > maxTitleW) {
+                    displaySub = displaySub.substring(0, displaySub.length() - 1);
+                }
+                displaySub = displaySub + "..";
             }
-            displaySub = displaySub + "..";
-        }
-        skija.drawText(displaySub, textX, py + 16.5f, 8f, 0xFFA0A0B0, false, SkijaEngine.ALIGN_LEFT);
-        skija.drawText(timeStr, timeX - timeW, py + 12.0f, 8.5f, 0xFFCCCCCC, true, SkijaEngine.ALIGN_LEFT);
+            skija.drawText(displaySub, textX, py + 16.5f, 8f, 0xFFA0A0B0, false, SkijaEngine.ALIGN_LEFT);
+            skija.drawText(timeStr, timeX - timeW, py + 12.0f, 8.5f, 0xFFCCCCCC, true, SkijaEngine.ALIGN_LEFT);
 
-        if (isPlaying) {
-            skija.drawEqualizerBars(barsX, py + 7f, 10f, 10f, borderColor, now);
-        } else {
-            for (int i = 0; i < 4; ++i) {
-                skija.drawRoundedRect(barsX + (float)i * 2.8f, py + 14.5f, 1.6f, 2.5f, 0.8f, 0x44FFFFFF);
+            if (!isPlaying) {
+                for (int i = 0; i < 4; ++i) {
+                    skija.drawRoundedRect(barsX + (float)i * 2.8f, py + 14.5f, 1.6f, 2.5f, 0.8f, 0x44FFFFFF);
+                }
             }
+
+            skija.drawPlayPauseButton(localBtnX, localBtnY, 7.5f, isPlaying, hoverBtn, borderColor);
+
+            float barX = textX;
+            float barW = (float)pillW - 46f;
+            float barY = py + pillH - 2.5f;
+            lastBarX = (int)(x + (textX - px));
+            lastBarY = (int)(y + pillH - 2.5f);
+            lastBarW = (int)barW;
+            skija.drawRoundedRect(barX, barY, barW, 2.0f, 1.0f, 0x33FFFFFF);
+            if (progress > 0.001) {
+                skija.drawRoundedRect(barX, barY, barW * (float)progress, 2.0f, 1.0f, borderColor);
+            }
+
+            skija.endHudFrame();
+
+            lastHudRenderTime = now;
+            hudTextureReady = true;
+            lastHudTitle = title;
+            lastHudArtist = artist;
+            lastHudPlaying = isPlaying;
+            lastHudHover = isHovered;
+            lastHudBtnHover = hoverBtn;
+            lastHudPosSec = posSec;
+            lastHudBorderColor = borderColor;
+            lastHudCover = coverBytes;
+            lastHudScale = guiScale;
         }
-
-        skija.drawPlayPauseButton(localBtnX, localBtnY, 7.5f, isPlaying, hoverBtn, borderColor);
-
-        float barX = textX;
-        float barW = (float)pillW - 46f;
-        float barY = py + pillH - 2.5f;
-        lastBarX = (int)(x + (textX - px));
-        lastBarY = (int)(y + pillH - 2.5f);
-        lastBarW = (int)barW;
-        skija.drawRoundedRect(barX, barY, barW, 2.0f, 1.0f, 0x33FFFFFF);
-        if (progress > 0.001) {
-            skija.drawRoundedRect(barX, barY, barW * (float)progress, 2.0f, 1.0f, borderColor);
-        }
-
-        skija.endHudFrame();
-
-        lastHudRenderTime = now;
-        hudTextureReady = true;
-        lastHudTitle = title;
-        lastHudArtist = artist;
-        lastHudPlaying = isPlaying;
-        lastHudHover = isHovered;
-        lastHudBtnHover = hoverBtn;
-        lastHudPosSec = posSec;
-        lastHudBorderColor = borderColor;
-        lastHudCover = coverBytes;
-        lastHudScale = guiScale;
 
         skija.renderHudToContext(ctx, x - 8, y - 6, frameW, frameH);
+
+        // Fluid 60+ FPS hardware accelerated equalizer bars via Minecraft RenderPearl quad fill:
+        if (isPlaying) {
+            int screenBarsX = x + pillW - 13 - 28;
+            int screenBarsY = y + 7;
+            for (int i = 0; i < 4; ++i) {
+                float wave = (float) Math.sin((double) now * 0.009 + (double) i * 1.3);
+                int barH = (int) (Math.abs(wave) * 7.5f) + 2;
+                int barTop = screenBarsY + 10 - barH;
+                int bx = screenBarsX + (int)(i * 3);
+                ctx.fill(bx, barTop, bx + 2, screenBarsY + 10, borderColor);
+            }
+        }
     }
 
     private static String formatTime(long seconds) {

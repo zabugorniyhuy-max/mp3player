@@ -89,6 +89,9 @@ extends Screen {
     private int lastTrackMenuIndex = -1;
     private boolean skijaTextureReady = false;
     private boolean forceSkijaRedraw = true;
+    private long lastHoverMask = -1L;
+    private int currentRenderPanelX;
+    private int currentRenderPanelY;
 
     public MainScreen() {
         super((Component)Component.literal((String)"Music Player"));
@@ -112,6 +115,7 @@ extends Screen {
         super.init();
         this.skijaTextureReady = false;
         this.forceSkijaRedraw = true;
+        this.lastHoverMask = -1L;
         com.mp3player.MP3PlayerClient.LOGGER.info("[MainScreen] init() called: width=" + this.width + ", height=" + this.height);
     }
 
@@ -221,6 +225,9 @@ extends Screen {
         int panelY = (int)((float)(this.height + 20) + (float)(targetY - this.height - 20) * eased);
         int panelX = centerX - panelW / 2;
 
+        this.currentRenderPanelX = panelX;
+        this.currentRenderPanelY = panelY;
+
         SkijaEngine skija = SkijaEngine.getInstance();
         if (skija.isAvailable() && ModConfig.getInstance().useSkija) {
             float guiScale = (float) this.minecraft.getWindow().getGuiScale();
@@ -239,9 +246,8 @@ extends Screen {
             String curTitle = isGsmtc ? this.gsmtc.getTitle() : this.localPlayer.getCurrentTrackName();
             if (curTitle == null) curTitle = "";
 
-            boolean mouseMoved = (mouseX != this.lastRenderMouseX || mouseY != this.lastRenderMouseY);
-            boolean panelMoved = (panelX != this.lastRenderPanelX || panelY != this.lastRenderPanelY);
-            boolean isAnimating = this.animationProgress < 1.0f || this.isClosing;
+            long hoverMask = this.computeHoverMask(mouseX, mouseY, panelX, panelY, panelW, panelH);
+            boolean hoverChanged = (hoverMask != this.lastHoverMask);
             boolean isDragging = this.draggingProgress || this.draggingVolume || this.draggingRange || this.draggingGsmtcSeek || this.draggingGsmtcVolume;
             boolean tabChanged = (this.currentTab != this.lastRenderTab);
             boolean themeChanged = (darkTheme != this.lastRenderDarkTheme);
@@ -250,24 +256,21 @@ extends Screen {
             boolean menuChanged = (this.trackMenuIndex != this.lastTrackMenuIndex);
             boolean posChanged = (posSec != this.lastRenderPosSec);
 
-            boolean isGpu = skija.isGpuMode();
             boolean stateChanged = this.forceSkijaRedraw
                     || !this.skijaTextureReady
-                    || isGpu
-                    || mouseMoved
-                    || panelMoved
-                    || isAnimating
-                    || isDragging
+                    || hoverChanged
                     || tabChanged
                     || themeChanged
                     || playChanged
                     || titleChanged
                     || menuChanged
-                    || posChanged;
+                    || (isPlaying && posChanged)
+                    || (isDragging && (now - this.lastSkijaRenderTime >= 16L));
 
             if (stateChanged) {
                 this.forceSkijaRedraw = false;
                 this.lastSkijaRenderTime = now;
+                this.lastHoverMask = hoverMask;
                 this.lastRenderMouseX = mouseX;
                 this.lastRenderMouseY = mouseY;
                 this.lastRenderPanelX = panelX;
@@ -347,6 +350,140 @@ extends Screen {
             DrawUtils.drawText(context, this.font, DrawUtils.t("Downloading: ", "Скачивание: ") + downloads, panelX + panelW - 120, panelY - 24, 0xFF55FF55, true);
         }
         super.extractRenderState(context, mouseX, mouseY, delta);
+    }
+
+    private long computeHoverMask(int mouseX, int mouseY, int panelX, int panelY, int panelW, int panelH) {
+        long mask = 0L;
+        int bit = 0;
+
+        int tab0W = 96, tab1W = 86, tab2W = 80, tab3W = 30;
+        int tab0X = panelX + 10;
+        int tab1X = tab0X + tab0W + 4;
+        int tab2X = tab1X + tab1W + 4;
+        int tab3X = tab2X + tab2W + 4;
+
+        if (this.isInside(mouseX, mouseY, tab0X, panelY - 22, tab0W, 22)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, tab1X, panelY - 22, tab1W, 22)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, tab2X, panelY - 22, tab2W, 22)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, tab3X, panelY - 22, tab3W, 22)) mask |= (1L << bit); bit++;
+
+        if (this.isInside(mouseX, mouseY, panelX + 8, panelY + 6, 22, 18)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, panelX + 34, panelY + 6, 26, 18)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, panelX + panelW - 90, panelY + 6, 22, 18)) mask |= (1L << bit); bit++;
+        if (this.isInside(mouseX, mouseY, panelX + panelW - 64, panelY + 6, 56, 18)) mask |= (1L << bit); bit++;
+
+        if (this.currentTab == 0) {
+            int cx = panelX + panelW / 2;
+            int timeY = panelY + 120;
+            int sbX = panelX + 44;
+            int sbW = panelW - 88;
+            int sbY = timeY - 1;
+            if (this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10)) mask |= (1L << bit); bit++;
+
+            int btnY = panelY + 140;
+            int btnS = 16, btnW_10 = 20;
+            int playCx = cx, playCy = btnY + 9;
+            int btnRewX = playCx - 14 - btnW_10;
+            int btnPrevX = btnRewX - 4 - btnS;
+            int dlBtnW = 54, dlBtnH = 18;
+            int dlBtnX = btnPrevX - 6 - dlBtnW;
+            int dlBtnY = btnY;
+            int btnFwdX = playCx + 14;
+            int btnNextX = btnFwdX + btnW_10 + 4;
+            int volIconX = btnNextX + btnS + 8;
+            int volBarX = volIconX + 12, volBarW = 46;
+
+            if (this.isInside(mouseX, mouseY, dlBtnX, dlBtnY, dlBtnW, dlBtnH)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnPrevX, btnY, btnS, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnRewX, btnY, btnW_10, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInsideCircle(mouseX, mouseY, playCx, playCy, 12)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnNextX, btnY, btnS, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, volBarX - 4, btnY - 2, volBarW + 8, 16)) mask |= (1L << bit); bit++;
+
+            if (ModConfig.getInstance().speakerMode) {
+                int auxY = panelY + 164;
+                int rangeBoxW = 150;
+                int rangeBoxX = cx - rangeBoxW / 2;
+                int sliderX = rangeBoxX + 54;
+                int sliderW = rangeBoxW - 64;
+                if (this.isInside(mouseX, mouseY, rangeBoxX, auxY - 2, rangeBoxW, 18)) mask |= (1L << bit); bit++;
+                if (this.isInside(mouseX, mouseY, sliderX - 4, auxY - 2, sliderW + 8, 18)) mask |= (1L << bit); bit++;
+            }
+        } else if (this.currentTab == 1 || this.currentTab == 2) {
+            int px = panelX, py = panelY, pw = panelW;
+            if (this.isInside(mouseX, mouseY, px + 8, py + 28, 22, 16)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, px + 34, py + 28, 22, 16)) mask |= (1L << bit); bit++;
+
+            int listX = px + 8, listY = py + 48, listW = pw - 16;
+            List<File> playlist = (this.currentTab == 2) ? this.localPlayer.getFavorites() : this.localPlayer.getPlaylist();
+            int scroll = (this.currentTab == 2) ? this.favTrackScroll : this.localTrackScroll;
+            for (int i = scroll; i < Math.min(playlist.size(), scroll + 4); ++i) {
+                int itemY = listY + 3 + (i - scroll) * 16;
+                int itemX = listX + 2;
+                int itemW = listW - 4;
+                int itemH = 15;
+                if (this.isInside(mouseX, mouseY, itemX, itemY, itemW, itemH)) mask |= (1L << bit); bit++;
+                if (this.isInside(mouseX, mouseY, itemX + itemW - 20, itemY + 1, 16, 13)) mask |= (1L << bit); bit++;
+                if (this.isInside(mouseX, mouseY, itemX + itemW - 40, itemY + 1, 16, 13)) mask |= (1L << bit); bit++;
+                if (this.isInside(mouseX, mouseY, itemX + 16, itemY + 1, 16, 13)) mask |= (1L << bit); bit++;
+            }
+
+            int barX = px + 8, barY = py + panelH - 70, barW = pw - 16;
+            int ctrlCenter = barX + barW / 2;
+            int btnY = barY + 46;
+            int btnS = 16, btnW_10 = 22;
+            int btnPrevX = ctrlCenter - 61;
+            int btnRewX = ctrlCenter - 39;
+            int playCx = ctrlCenter, playCy = btnY + 8;
+            int btnFwdX = ctrlCenter + 17;
+            int btnNextX = ctrlCenter + 45;
+            int sbX = barX + 46, sbW = barW - 126, sbY = barY + 28;
+
+            if (this.isInside(mouseX, mouseY, sbX, sbY - 4, sbW, 10)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnPrevX, btnY, btnS, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnRewX, btnY, btnW_10, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInsideCircle(mouseX, mouseY, playCx, playCy, 10)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnFwdX, btnY, btnW_10, btnS)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btnNextX, btnY, btnS, btnS)) mask |= (1L << bit); bit++;
+
+            int volBarX = barX + barW - 44;
+            if (this.isInside(mouseX, mouseY, volBarX - 2, btnY + 5, 44, 8)) mask |= (1L << bit); bit++;
+        } else if (this.currentTab == 3) {
+            int sx = panelX + 8, sy = panelY + 30, sw = panelW - 16;
+            int cy = sy + 8 - this.settingsScroll;
+            int cardX = sx + 8, cardW = sw - 16;
+            int card1Y = cy + 18;
+            int pillThemeW = 84, pillThemeH = 18;
+            int pillThemeX = cardX + cardW - pillThemeW - 10;
+            if (this.isInside(mouseX, mouseY, pillThemeX, card1Y + 4, pillThemeW, pillThemeH)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, pillThemeX, card1Y + 30, pillThemeW, pillThemeH)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, pillThemeX, card1Y + 56, pillThemeW, pillThemeH)) mask |= (1L << bit); bit++;
+
+            int sec2Y = cy + 108;
+            int card2Y = sec2Y + 18;
+            int btnW = (cardW - 28) / 2, btnH = 20;
+            int btn1X = cardX + 10, btn1Y = card2Y + 6;
+            int btn2X = cardX + 18 + btnW, btn2Y = card2Y + 6;
+            if (this.isInside(mouseX, mouseY, btn1X, btn1Y, btnW, btnH)) mask |= (1L << bit); bit++;
+            if (this.isInside(mouseX, mouseY, btn2X, btn2Y, btnW, btnH)) mask |= (1L << bit); bit++;
+            int badgeW = 34, slRangeW = 108;
+            int badgeX = cardX + cardW - badgeW - 10;
+            int slRangeX = badgeX - slRangeW - 8, slRangeY = card2Y + 42;
+            if (this.isInside(mouseX, mouseY, slRangeX - 4, slRangeY - 5, slRangeW + 8, 16)) mask |= (1L << bit); bit++;
+            int slVolX = slRangeX, slVolY = card2Y + 66;
+            if (this.isInside(mouseX, mouseY, slVolX - 4, slVolY - 5, slRangeW + 8, 16)) mask |= (1L << bit); bit++;
+        }
+
+        if (this.trackMenuIndex != -1) {
+            if (this.isInside(mouseX, mouseY, this.trackMenuX, this.trackMenuY, 135, 90)) {
+                mask |= (1L << 62);
+                int optIdx = (int)((mouseY - this.trackMenuY) / 15);
+                mask |= ((long)(optIdx & 0x7) << 58);
+            }
+        }
+
+        return mask;
     }
 
     private void renderTrackMenu(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
@@ -623,7 +760,7 @@ extends Screen {
         int listX = px + 8;
         int listY = py + 48;
         int listW = pw - 16;
-        int listH = 114;
+        int listH = 74;
         skija.drawRoundedRect(listX, listY, listW, listH, 6.0f, this.bgDark());
         skija.drawRoundedRectOutline(listX, listY, listW, listH, 6.0f, 1.0f, this.border());
         if (playlist.isEmpty()) {
@@ -631,7 +768,7 @@ extends Screen {
             skija.drawText(DrawUtils.t("MP3s are converted automatically", "MP3 \u043a\u043e\u043d\u0432\u0435\u0440\u0442\u0438\u0440\u0443\u044e\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438"), listX + listW / 2, listY + listH / 2 + 8, 9.0f, this.textSecondary(), false, 18);
         } else {
             int scroll;
-            for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 7); ++i) {
+            for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 4); ++i) {
                 int itemY = listY + 3 + (i - scroll) * 16;
                 int itemX = listX + 2;
                 int itemW = listW - 4;
@@ -673,9 +810,13 @@ extends Screen {
                 int col = current ? this.accent() : this.textPrimary();
                 float nameStartX = isFav && !current ? (float)(itemX + 26) : (float)(itemX + 19);
                 skija.drawText((String)displayName, nameStartX, (float)itemY + (float)itemH * 0.5f + 0.5f, 9.5f, col, current, 17);
+                boolean hoverHeart = this.isInside(mouseX, mouseY, itemX + 16, itemY + 1, 14, 13);
                 boolean hoverPlay = this.isInside(mouseX, mouseY, itemX + itemW - 60, itemY + 1, 16, 13);
                 boolean hoverDel = this.isInside(mouseX, mouseY, itemX + itemW - 40, itemY + 1, 16, 13);
                 boolean hoverDots = this.isInside(mouseX, mouseY, itemX + itemW - 20, itemY + 1, 16, 13);
+                if (hoverHeart && !current) {
+                    skija.drawRoundedRect(itemX + 16, itemY + 1, 14.0f, 13.0f, 3.0f, 0x33FF5555);
+                }
                 if (hoverPlay) {
                     skija.drawRoundedRect(itemX + itemW - 60, itemY + 1, 16.0f, 13.0f, 3.0f, 0x33FFFFFF);
                 }
@@ -1644,8 +1785,8 @@ extends Screen {
         float eased = this.easeOutCubic(this.animationProgress);
         int pw = 340;
         int ph = 196;
-        int px = this.width / 2 - pw / 2;
-        int py = (int)((float)(this.height + 20) + (float)(this.height / 2 - ph / 2 - this.height - 20) * eased);
+        int px = this.currentRenderPanelX > 0 ? this.currentRenderPanelX : this.width / 2 - pw / 2;
+        int py = this.currentRenderPanelY > 0 ? this.currentRenderPanelY : (int)((float)(this.height + 20) + (float)(this.height / 2 - ph / 2 - this.height - 20) * eased);
         int tab0W = 96;
         int tab1W = 86;
         int tab2W = 80;
@@ -1818,12 +1959,27 @@ extends Screen {
         int listY = py + 48;
         int listW = pw - 16;
         List<File> playlist = showFavorites ? this.localPlayer.getFavorites() : this.localPlayer.getPlaylist();
-        for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 7); ++i) {
+        for (int i = scroll = showFavorites ? this.favTrackScroll : this.localTrackScroll; i < Math.min(playlist.size(), scroll + 4); ++i) {
             int itemX = listX + 2;
             int itemY = listY + 3 + (i - scroll) * 16;
             int itemW = listW - 4;
             int itemH = 15;
             if (!this.isInside(mx, my, itemX, itemY, itemW, itemH)) continue;
+            File f = playlist.get(i);
+            if (this.isInside(mx, my, itemX + 16, itemY + 1, 16, 13)) {
+                this.playClickSound();
+                if (this.localPlayer.getFavorites().contains(f)) {
+                    this.localPlayer.getFavorites().remove(f);
+                    ModConfig.getInstance().favorites.remove(f.getName());
+                } else {
+                    this.localPlayer.getFavorites().add(f);
+                    if (!ModConfig.getInstance().favorites.contains(f.getName())) {
+                        ModConfig.getInstance().favorites.add(f.getName());
+                    }
+                }
+                ModConfig.getInstance().save();
+                return true;
+            }
             if (this.isInside(mx, my, itemX + itemW - 20, itemY + 1, 16, 13)) {
                 this.playClickSound();
                 this.trackMenuIndex = i;
@@ -1833,19 +1989,17 @@ extends Screen {
                 if (this.trackMenuX < 0) {
                     this.trackMenuX = 0;
                 }
-                if (this.trackMenuY + 90 > this.height) {
-                    this.trackMenuY = this.height - 90;
+                if (this.trackMenuY + 95 > this.height) {
+                    this.trackMenuY = this.height - 95;
                 }
                 return true;
             }
             if (this.isInside(mx, my, itemX + itemW - 40, itemY + 1, 16, 13)) {
                 this.playClickSound();
-                File f = playlist.get(i);
                 this.deleteTrackFile(f);
                 return true;
             }
             this.playClickSound();
-            File f = playlist.get(i);
             int realIndex = this.localPlayer.getPlaylist().indexOf(f);
             if (realIndex >= 0) {
                 if (this.localPlayer.getCurrentIndex() == realIndex && this.localPlayer.isPlaying()) {
@@ -1858,7 +2012,7 @@ extends Screen {
             }
             return true;
         }
-        return this.handlePlayerClick(mx, my, px + 8, py + ph - 72, pw - 16);
+        return this.handlePlayerClick(mx, my, px + 8, py + ph - 70, pw - 16);
     }
 
     private boolean handlePlayerClick(double mx, double my, int barX, int barY, int barW) {
@@ -1995,8 +2149,8 @@ extends Screen {
         float eased = this.easeOutCubic(this.animationProgress);
         int pw = 340;
         int ph = 196;
-        int px = this.width / 2 - pw / 2;
-        int py = (int)((float)(this.height + 20) + (float)(this.height / 2 - ph / 2 - this.height - 20) * eased);
+        int px = this.currentRenderPanelX > 0 ? this.currentRenderPanelX : this.width / 2 - pw / 2;
+        int py = this.currentRenderPanelY > 0 ? this.currentRenderPanelY : (int)((float)(this.height + 20) + (float)(this.height / 2 - ph / 2 - this.height - 20) * eased);
         int barX = px + 8;
         int barY = py + ph - 70;
         int barW = pw - 16;

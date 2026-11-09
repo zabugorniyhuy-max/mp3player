@@ -1,7 +1,6 @@
 package com.mp3player.client.gui.skija;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.renderpearl.backend.opengl.GlTexture;
 import com.mp3player.MP3PlayerClient;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.skija.svg.SVGDOM;
@@ -12,11 +11,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
 
 public class SkijaEngine {
     private static SkijaEngine instance;
@@ -57,20 +51,12 @@ public class SkijaEngine {
     private boolean available = false;
     private boolean darkTheme = true;
 
-    // GPU Hardware Acceleration
-    private DirectContext directContext;
-    private boolean directContextAttempted = false;
-    private boolean gpuMode = false;
-
     private int bufferWidth = 0;
     private int bufferHeight = 0;
     private NativeImage nativeImage;
     private DynamicTexture dynamicTexture;
     private Surface surface;
     private Canvas uiCanvas;
-    private int uiFbo = 0;
-    private BackendRenderTarget uiRenderTarget;
-    private Surface uiGpuSurface;
 
     private int hudBufferWidth = 0;
     private int hudBufferHeight = 0;
@@ -78,17 +64,6 @@ public class SkijaEngine {
     private DynamicTexture hudDynamicTexture;
     private Surface hudSurface;
     private Canvas hudCanvas;
-    private int hudFbo = 0;
-    private BackendRenderTarget hudRenderTarget;
-    private Surface hudGpuSurface;
-
-    private int savedFbo;
-    private int savedVao;
-    private int savedProgram;
-    private int savedArrayBuffer;
-    private int savedElementArrayBuffer;
-    private int savedActiveTexture;
-    private int savedTexture2D;
 
     private Canvas canvas;
     private int scissorSaveCount = 0;
@@ -228,40 +203,6 @@ public class SkijaEngine {
         return this.darkTheme;
     }
 
-    public boolean isGpuMode() {
-        return this.gpuMode && (this.uiGpuSurface != null || this.hudGpuSurface != null);
-    }
-
-    private void ensureDirectContext() {
-        if (!this.directContextAttempted) {
-            this.directContextAttempted = true;
-            try {
-                this.directContext = DirectContext.makeGL();
-                if (this.directContext != null) {
-                    this.gpuMode = true;
-                    MP3PlayerClient.LOGGER.info("[Skija] GPU hardware acceleration successfully initialized via OpenGL DirectContext!");
-                } else {
-                    MP3PlayerClient.LOGGER.warn("[Skija] DirectContext.makeGL() returned null; using CPU rasterizer fallback.");
-                    this.gpuMode = false;
-                }
-            } catch (Throwable t) {
-                MP3PlayerClient.LOGGER.warn("[Skija] Could not initialize OpenGL DirectContext: {}; using CPU fallback.", t.getMessage());
-                this.gpuMode = false;
-            }
-        }
-    }
-
-    private int getTextureGlId(DynamicTexture tex) {
-        if (tex != null) {
-            try {
-                if (tex.getTexture() instanceof GlTexture glTex) {
-                    return glTex.glId();
-                }
-            } catch (Throwable ignored) {}
-        }
-        return 0;
-    }
-
     public synchronized void beginFrame(int width, int height, float scale, float offsetX, float offsetY) {
         if (!this.available || width <= 0 || height <= 0) {
             return;
@@ -272,80 +213,24 @@ public class SkijaEngine {
         int physicalWidth = Math.max(1, (int) Math.ceil((float) width * actualScale));
         int physicalHeight = Math.max(1, (int) Math.ceil((float) height * actualScale));
 
-        if (this.bufferWidth != physicalWidth || this.bufferHeight != physicalHeight || (this.uiCanvas == null)) {
+        if (this.surface == null || this.bufferWidth != physicalWidth || this.bufferHeight != physicalHeight) {
             destroySurface();
             this.bufferWidth = physicalWidth;
             this.bufferHeight = physicalHeight;
 
             try {
                 this.nativeImage = new NativeImage(NativeImage.Format.RGBA, physicalWidth, physicalHeight, false);
+                ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+                this.surface = Surface.wrapPixels(info, this.nativeImage.getPointer(), (long) physicalWidth * 4);
+                this.uiCanvas = this.surface.getCanvas();
+
                 this.dynamicTexture = new DynamicTexture(() -> "skija_ui", this.nativeImage);
                 Minecraft.getInstance().getTextureManager().register(SKIJA_TEXTURE_ID, this.dynamicTexture);
-
-                ensureDirectContext();
-                boolean gpuReady = false;
-                if (this.gpuMode && this.directContext != null) {
-                    int glTexId = getTextureGlId(this.dynamicTexture);
-                    if (glTexId > 0) {
-                        try {
-                            if (this.uiFbo == 0) {
-                                this.uiFbo = GL30.glGenFramebuffers();
-                            }
-                            int curFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-                            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.uiFbo);
-                            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, glTexId, 0);
-                            int fboStatus = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
-                            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, curFbo);
-
-                            if (fboStatus == GL30.GL_FRAMEBUFFER_COMPLETE) {
-                                this.uiRenderTarget = BackendRenderTarget.makeGL(
-                                    physicalWidth,
-                                    physicalHeight,
-                                    0,
-                                    8,
-                                    this.uiFbo,
-                                    FramebufferFormat.GR_GL_RGBA8
-                                );
-                                this.uiGpuSurface = Surface.makeFromBackendRenderTarget(
-                                    this.directContext,
-                                    this.uiRenderTarget,
-                                    SurfaceOrigin.TOP_LEFT,
-                                    ColorType.RGBA_8888,
-                                    ColorSpace.getSRGB()
-                                );
-                                this.uiCanvas = this.uiGpuSurface.getCanvas();
-                                gpuReady = true;
-                            }
-                        } catch (Throwable t) {
-                            MP3PlayerClient.LOGGER.warn("[Skija] Failed creating GPU UI surface: " + t.getMessage());
-                        }
-                    }
-                }
-
-                if (!gpuReady) {
-                    ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
-                    this.surface = Surface.wrapPixels(info, this.nativeImage.getPointer(), (long) physicalWidth * 4);
-                    this.uiCanvas = this.surface.getCanvas();
-                }
             } catch (Throwable t) {
                 MP3PlayerClient.LOGGER.error("[Skija] Error allocating surface: {}", t.getMessage());
                 this.uiCanvas = null;
                 this.canvas = null;
                 return;
-            }
-        }
-
-        if (this.uiGpuSurface != null) {
-            this.savedFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-            this.savedVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
-            this.savedProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-            this.savedArrayBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
-            this.savedElementArrayBuffer = GL11.glGetInteger(GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING);
-            this.savedActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-            this.savedTexture2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-
-            if (this.directContext != null) {
-                this.directContext.resetGLAll();
             }
         }
 
@@ -374,33 +259,7 @@ public class SkijaEngine {
     }
 
     public synchronized void endFrame() {
-        if (this.uiCanvas == null) {
-            return;
-        }
-
-        if (this.uiGpuSurface != null && this.directContext != null) {
-            try {
-                while (this.scissorSaveCount > 0) {
-                    this.uiCanvas.restore();
-                    this.scissorSaveCount--;
-                }
-                this.uiCanvas.restore();
-                this.directContext.flush();
-
-                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.savedFbo);
-                GL30.glBindVertexArray(this.savedVao);
-                GL20.glUseProgram(this.savedProgram);
-                GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.savedArrayBuffer);
-                GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, this.savedElementArrayBuffer);
-                GL13.glActiveTexture(this.savedActiveTexture);
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.savedTexture2D);
-            } catch (Throwable t) {
-                MP3PlayerClient.LOGGER.error("[Skija] Error ending GPU frame: {}", t.getMessage());
-            }
-            return;
-        }
-
-        if (this.surface == null || this.dynamicTexture == null) {
+        if (this.surface == null || this.uiCanvas == null || this.dynamicTexture == null) {
             return;
         }
         try {
@@ -411,7 +270,7 @@ public class SkijaEngine {
             this.uiCanvas.restore();
             this.dynamicTexture.upload();
         } catch (Throwable t) {
-            MP3PlayerClient.LOGGER.error("[Skija] Error ending CPU frame: {}", t.getMessage());
+            MP3PlayerClient.LOGGER.error("[Skija] Error ending frame: {}", t.getMessage());
         }
     }
 
@@ -432,80 +291,24 @@ public class SkijaEngine {
         int physicalWidth = Math.max(1, (int) Math.ceil((float) width * actualScale));
         int physicalHeight = Math.max(1, (int) Math.ceil((float) height * actualScale));
 
-        if (this.hudBufferWidth != physicalWidth || this.hudBufferHeight != physicalHeight || (this.hudCanvas == null)) {
+        if (this.hudSurface == null || this.hudBufferWidth != physicalWidth || this.hudBufferHeight != physicalHeight) {
             destroyHudSurface();
             this.hudBufferWidth = physicalWidth;
             this.hudBufferHeight = physicalHeight;
 
             try {
                 this.hudNativeImage = new NativeImage(NativeImage.Format.RGBA, physicalWidth, physicalHeight, false);
+                ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
+                this.hudSurface = Surface.wrapPixels(info, this.hudNativeImage.getPointer(), (long) physicalWidth * 4);
+                this.hudCanvas = this.hudSurface.getCanvas();
+
                 this.hudDynamicTexture = new DynamicTexture(() -> "skija_hud", this.hudNativeImage);
                 Minecraft.getInstance().getTextureManager().register(SKIJA_HUD_TEXTURE_ID, this.hudDynamicTexture);
-
-                ensureDirectContext();
-                boolean hudGpuReady = false;
-                if (this.gpuMode && this.directContext != null) {
-                    int glTexId = getTextureGlId(this.hudDynamicTexture);
-                    if (glTexId > 0) {
-                        try {
-                            if (this.hudFbo == 0) {
-                                this.hudFbo = GL30.glGenFramebuffers();
-                            }
-                            int curFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-                            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.hudFbo);
-                            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, glTexId, 0);
-                            int fboStatus = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
-                            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, curFbo);
-
-                            if (fboStatus == GL30.GL_FRAMEBUFFER_COMPLETE) {
-                                this.hudRenderTarget = BackendRenderTarget.makeGL(
-                                    physicalWidth,
-                                    physicalHeight,
-                                    0,
-                                    8,
-                                    this.hudFbo,
-                                    FramebufferFormat.GR_GL_RGBA8
-                                );
-                                this.hudGpuSurface = Surface.makeFromBackendRenderTarget(
-                                    this.directContext,
-                                    this.hudRenderTarget,
-                                    SurfaceOrigin.TOP_LEFT,
-                                    ColorType.RGBA_8888,
-                                    ColorSpace.getSRGB()
-                                );
-                                this.hudCanvas = this.hudGpuSurface.getCanvas();
-                                hudGpuReady = true;
-                            }
-                        } catch (Throwable t) {
-                            MP3PlayerClient.LOGGER.warn("[Skija] Failed creating GPU HUD surface: " + t.getMessage());
-                        }
-                    }
-                }
-
-                if (!hudGpuReady) {
-                    ImageInfo info = new ImageInfo(physicalWidth, physicalHeight, ColorType.RGBA_8888, ColorAlphaType.PREMUL);
-                    this.hudSurface = Surface.wrapPixels(info, this.hudNativeImage.getPointer(), (long) physicalWidth * 4);
-                    this.hudCanvas = this.hudSurface.getCanvas();
-                }
             } catch (Throwable t) {
                 MP3PlayerClient.LOGGER.error("[Skija] Error allocating HUD surface: {}", t.getMessage());
                 this.hudCanvas = null;
                 this.canvas = null;
                 return;
-            }
-        }
-
-        if (this.hudGpuSurface != null) {
-            this.savedFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-            this.savedVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
-            this.savedProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-            this.savedArrayBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
-            this.savedElementArrayBuffer = GL11.glGetInteger(GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING);
-            this.savedActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-            this.savedTexture2D = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-
-            if (this.directContext != null) {
-                this.directContext.resetGLAll();
             }
         }
 
@@ -527,33 +330,7 @@ public class SkijaEngine {
     }
 
     public synchronized void endHudFrame() {
-        if (this.hudCanvas == null) {
-            return;
-        }
-
-        if (this.hudGpuSurface != null && this.directContext != null) {
-            try {
-                while (this.scissorSaveCount > 0) {
-                    this.hudCanvas.restore();
-                    this.scissorSaveCount--;
-                }
-                this.hudCanvas.restore();
-                this.directContext.flush();
-
-                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.savedFbo);
-                GL30.glBindVertexArray(this.savedVao);
-                GL20.glUseProgram(this.savedProgram);
-                GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.savedArrayBuffer);
-                GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, this.savedElementArrayBuffer);
-                GL13.glActiveTexture(this.savedActiveTexture);
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.savedTexture2D);
-            } catch (Throwable t) {
-                MP3PlayerClient.LOGGER.error("[Skija] Error ending GPU HUD frame: {}", t.getMessage());
-            }
-            return;
-        }
-
-        if (this.hudSurface == null || this.hudDynamicTexture == null) {
+        if (this.hudSurface == null || this.hudCanvas == null || this.hudDynamicTexture == null) {
             return;
         }
         try {
@@ -624,6 +401,8 @@ public class SkijaEngine {
         int alpha = (color >>> 24) & 0xFF;
         int rgb = color & 0x00FFFFFF;
 
+        // Ultra-fast multi-layer analytic soft shadow without CPU Gaussian convolution.
+        // Replaces CPU software MaskFilter blur which was taking ~150ms per frame.
         float totalSpread = spread + blur * 0.7f;
         float yOffset = Math.max(1.0f, blur * 0.18f);
 
@@ -1256,18 +1035,6 @@ public class SkijaEngine {
     }
 
     private void destroySurface() {
-        if (this.uiGpuSurface != null) {
-            try { this.uiGpuSurface.close(); } catch (Throwable ignored) {}
-            this.uiGpuSurface = null;
-        }
-        if (this.uiRenderTarget != null) {
-            try { this.uiRenderTarget.close(); } catch (Throwable ignored) {}
-            this.uiRenderTarget = null;
-        }
-        if (this.uiFbo != 0) {
-            try { GL30.glDeleteFramebuffers(this.uiFbo); } catch (Throwable ignored) {}
-            this.uiFbo = 0;
-        }
         if (this.surface != null) {
             try { this.surface.close(); } catch (Throwable ignored) {}
             this.surface = null;
@@ -1285,18 +1052,6 @@ public class SkijaEngine {
     }
 
     private void destroyHudSurface() {
-        if (this.hudGpuSurface != null) {
-            try { this.hudGpuSurface.close(); } catch (Throwable ignored) {}
-            this.hudGpuSurface = null;
-        }
-        if (this.hudRenderTarget != null) {
-            try { this.hudRenderTarget.close(); } catch (Throwable ignored) {}
-            this.hudRenderTarget = null;
-        }
-        if (this.hudFbo != 0) {
-            try { GL30.glDeleteFramebuffers(this.hudFbo); } catch (Throwable ignored) {}
-            this.hudFbo = 0;
-        }
         if (this.hudSurface != null) {
             try { this.hudSurface.close(); } catch (Throwable ignored) {}
             this.hudSurface = null;
@@ -1316,12 +1071,6 @@ public class SkijaEngine {
     public synchronized void destroy() {
         destroySurface();
         destroyHudSurface();
-        if (this.directContext != null) {
-            try { this.directContext.close(); } catch (Throwable ignored) {}
-            this.directContext = null;
-        }
-        this.directContextAttempted = false;
-        this.gpuMode = false;
         if (this.gsmtcCoverImage != null) {
             try { this.gsmtcCoverImage.close(); } catch (Throwable ignored) {}
             this.gsmtcCoverImage = null;
