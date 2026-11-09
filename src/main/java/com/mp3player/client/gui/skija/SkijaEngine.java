@@ -401,44 +401,24 @@ public class SkijaEngine {
         int alpha = (color >>> 24) & 0xFF;
         int rgb = color & 0x00FFFFFF;
 
-        // Ultra-fast multi-layer analytic soft shadow without CPU Gaussian convolution.
-        // Replaces CPU software MaskFilter blur which was taking ~150ms per frame.
-        float totalSpread = spread + blur * 0.7f;
+        float totalSpread = spread + blur * 0.65f;
         float yOffset = Math.max(1.0f, blur * 0.18f);
 
-        // Layer 4 (Outer ambient halo - soft 12% opacity)
-        int a4 = (int) (alpha * 0.12f);
-        if (a4 > 0) {
-            shadowPaint.setColor((a4 << 24) | rgb);
-            float ext = totalSpread;
-            float r = Math.max(0f, radius + ext * 0.75f);
-            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
-        }
-
-        // Layer 3 (Penumbra - 22% opacity)
-        int a3 = (int) (alpha * 0.22f);
-        if (a3 > 0) {
-            shadowPaint.setColor((a3 << 24) | rgb);
-            float ext = totalSpread * 0.65f;
-            float r = Math.max(0f, radius + ext * 0.55f);
-            this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
-        }
-
-        // Layer 2 (Umbra - 36% opacity)
-        int a2 = (int) (alpha * 0.36f);
+        // Layer 2: Outer diffuse penumbra
+        int a2 = (int) (alpha * 0.28f);
         if (a2 > 0) {
             shadowPaint.setColor((a2 << 24) | rgb);
-            float ext = totalSpread * 0.35f;
-            float r = Math.max(0f, radius + ext * 0.35f);
+            float ext = totalSpread;
+            float r = Math.max(0f, radius + ext * 0.65f);
             this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
         }
 
-        // Layer 1 (Contact core - 52% opacity)
-        int a1 = (int) (alpha * 0.52f);
+        // Layer 1: Core contact shadow
+        int a1 = (int) (alpha * 0.48f);
         if (a1 > 0) {
             shadowPaint.setColor((a1 << 24) | rgb);
-            float ext = totalSpread * 0.12f;
-            float r = Math.max(0f, radius + ext * 0.15f);
+            float ext = totalSpread * 0.35f;
+            float r = Math.max(0f, radius + ext * 0.35f);
             this.canvas.drawRRect(RRect.makeXYWH(x - ext, y - ext + yOffset, w + ext * 2f, h + ext * 2f, r), shadowPaint);
         }
     }
