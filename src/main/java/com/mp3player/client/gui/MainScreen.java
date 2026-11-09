@@ -209,10 +209,17 @@ extends Screen {
         if (skija.isAvailable() && ModConfig.getInstance().useSkija) {
             float guiScale = (float) this.minecraft.getWindow().getGuiScale();
             skija.setDarkTheme(darkTheme);
-            skija.beginFrame(this.width, this.height, guiScale);
+
+            int pad = 24;
+            int originX = panelX - pad;
+            int originY = panelY - 28;
+            int boundsW = panelW + pad * 2;
+            int boundsH = panelH + 28 + pad;
+
+            skija.beginFrame(boundsW, boundsH, guiScale, -originX, -originY);
             this.renderScreenSkija(skija, mouseX, mouseY, panelX, panelY, panelW, panelH);
             skija.endFrame();
-            skija.renderToContext(context, 0, 0, this.width, this.height);
+            skija.renderToContext(context, originX, originY, boundsW, boundsH);
             super.extractRenderState(context, mouseX, mouseY, delta);
             return;
         }
@@ -429,8 +436,11 @@ extends Screen {
         if (title.isEmpty()) {
             title = DrawUtils.t("No title", "\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f");
         }
-        if (skija.getTextWidth((String)(displayTitle = title), 10.5f, true) > maxTextW) {
-            while (((String)displayTitle).length() > 3 && skija.getTextWidth((String)displayTitle + "..", 10.5f, true) > maxTextW) {
+        float fullTitleW = skija.getTextWidth((String)(displayTitle = title), 10.5f, true);
+        if (fullTitleW > maxTextW) {
+            int est = (int) Math.max(1, title.length() * (maxTextW / fullTitleW));
+            displayTitle = title.substring(0, Math.min(title.length(), est));
+            while (((String)displayTitle).length() > 1 && skija.getTextWidth((String)displayTitle + "..", 10.5f, true) > maxTextW) {
                 displayTitle = ((String)displayTitle).substring(0, ((String)displayTitle).length() - 1);
             }
             displayTitle = (String)displayTitle + "..";
@@ -444,8 +454,11 @@ extends Screen {
         }
         if (!sub.isEmpty()) {
             Object displaySub = sub;
-            if (skija.getTextWidth((String)displaySub, 8.5f, false) > maxTextW) {
-                while (((String)displaySub).length() > 3 && skija.getTextWidth((String)displaySub + "..", 8.5f, false) > maxTextW) {
+            float fullSubW = skija.getTextWidth((String)displaySub, 8.5f, false);
+            if (fullSubW > maxTextW) {
+                int est = (int) Math.max(1, sub.length() * (maxTextW / fullSubW));
+                displaySub = sub.substring(0, Math.min(sub.length(), est));
+                while (((String)displaySub).length() > 1 && skija.getTextWidth((String)displaySub + "..", 8.5f, false) > maxTextW) {
                     displaySub = ((String)displaySub).substring(0, ((String)displaySub).length() - 1);
                 }
                 displaySub = (String)displaySub + "..";

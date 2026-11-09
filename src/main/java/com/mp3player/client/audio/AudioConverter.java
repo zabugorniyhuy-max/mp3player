@@ -41,28 +41,36 @@ public class AudioConverter {
             if (ffmpegFile.length() > 5000000L) {
                 return ffmpegFile;
             }
-            MP3PlayerClient.LOGGER.warn("FFmpeg file is too small (corrupted?), extracting again...");
+            MP3PlayerClient.LOGGER.warn("FFmpeg file is too small (corrupted?), re-checking...");
             ffmpegFile.delete();
         }
         if (!mp3playerDir.exists()) {
             mp3playerDir.mkdirs();
         }
-        MP3PlayerClient.LOGGER.info("Extracting FFmpeg...");
-        try (InputStream in = AudioConverter.class.getResourceAsStream("/ffmpeg.exe");){
-            if (in == null) {
-                MP3PlayerClient.LOGGER.error("FFmpeg not found in mod resources!");
-                File file2 = null;
-                return file2;
+
+        // Check if ffmpeg exists on system PATH
+        try {
+            Process process = new ProcessBuilder("ffmpeg", "-version").start();
+            if (process.waitFor() == 0) {
+                MP3PlayerClient.LOGGER.info("System FFmpeg detected on PATH!");
+                return new File("ffmpeg");
             }
-            Files.copy(in, ffmpegFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            MP3PlayerClient.LOGGER.info("FFmpeg extracted to: {}", (Object)ffmpegFile.getAbsolutePath());
-            File file = ffmpegFile;
-            return file;
+        } catch (Throwable ignored) {}
+
+        // Check mod resources if bundled
+        try (InputStream in = AudioConverter.class.getResourceAsStream("/ffmpeg.exe")) {
+            if (in != null) {
+                MP3PlayerClient.LOGGER.info("Extracting FFmpeg from mod resources...");
+                Files.copy(in, ffmpegFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                MP3PlayerClient.LOGGER.info("FFmpeg extracted to: {}", ffmpegFile.getAbsolutePath());
+                return ffmpegFile;
+            }
+        } catch (Exception e) {
+            MP3PlayerClient.LOGGER.error("Failed to extract FFmpeg: {}", e.getMessage());
         }
-        catch (Exception e) {
-            MP3PlayerClient.LOGGER.error("Failed to extract FFmpeg: {}", (Object)e.getMessage());
-            return null;
-        }
+
+        MP3PlayerClient.LOGGER.info("FFmpeg binary not bundled. Place ffmpeg.exe in: " + mp3playerDir.getAbsolutePath());
+        return null;
     }
 
     public static boolean isFFmpegAvailable() {

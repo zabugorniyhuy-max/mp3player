@@ -43,6 +43,18 @@ public class GsmtcHudOverlay {
     private static int lastBarY = 0;
     private static int lastBarW = 0;
 
+    private static long lastHudRenderTime = 0L;
+    private static boolean hudTextureReady = false;
+    private static String lastHudTitle = "";
+    private static String lastHudArtist = "";
+    private static boolean lastHudPlaying = false;
+    private static boolean lastHudHover = false;
+    private static boolean lastHudBtnHover = false;
+    private static long lastHudPosSec = -1L;
+    private static int lastHudBorderColor = 0;
+    private static byte[] lastHudCover = null;
+    private static float lastHudScale = 1.0f;
+
     public static void register() {
         HudElementRegistry.addLast(
             Identifier.fromNamespaceAndPath("mp3player", "hud_overlay"),
@@ -85,6 +97,7 @@ public class GsmtcHudOverlay {
             lastPillH = 0;
             lastBtnRadius = 0;
             lastBarW = 0;
+            hudTextureReady = false;
             return;
         }
         boolean hasGsmtc = isGsmtcPlaying || manager.isAvailable() && manager.hasTrack() && !isLocalPlaying;
@@ -160,6 +173,44 @@ public class GsmtcHudOverlay {
         float guiScale = (float) Minecraft.getInstance().getWindow().getGuiScale();
         int frameW = pillW + 16;
         int frameH = pillH + 16;
+
+        int btnRadius = 8;
+        int btnX = x + pillW - 13;
+        int btnY = y + 12;
+        lastBtnX = btnX;
+        lastBtnY = btnY;
+        lastBtnRadius = btnRadius;
+        boolean hoverBtn = GsmtcHudOverlay.isInsideCircle(mouseX, mouseY, btnX, btnY, btnRadius + 3);
+        long posSec = hasGsmtc ? (long)manager.getPosition() : local.getCurrentPosition() / 1000000L;
+        byte[] coverBytes = hasGsmtc ? manager.getCoverBytes() : skija.getLocalCoverBytes();
+
+        long now = System.currentTimeMillis();
+        boolean stateChanged = !title.equals(lastHudTitle)
+                || !artist.equals(lastHudArtist)
+                || isPlaying != lastHudPlaying
+                || isHovered != lastHudHover
+                || hoverBtn != lastHudBtnHover
+                || posSec != lastHudPosSec
+                || borderColor != lastHudBorderColor
+                || coverBytes != lastHudCover
+                || Math.abs(guiScale - lastHudScale) > 0.01f;
+
+        boolean needRedraw;
+        if (!hudTextureReady || stateChanged) {
+            needRedraw = true;
+        } else if (isPlaying) {
+            // Smooth ~35 FPS update for animated equalizer wave while playing
+            needRedraw = (now - lastHudRenderTime) >= 28L;
+        } else {
+            // Paused with no state change: skip redraw and re-use existing texture directly!
+            needRedraw = false;
+        }
+
+        if (!needRedraw) {
+            skija.renderHudToContext(ctx, x - 8, y - 6, frameW, frameH);
+            return;
+        }
+
         skija.beginHudFrame(frameW, frameH, guiScale);
 
         float px = 8f;
@@ -168,29 +219,24 @@ public class GsmtcHudOverlay {
         skija.drawRoundedRect(px, py, pillW, pillH, 12f, bg);
         skija.drawRoundedRectOutline(px, py, pillW, pillH, 12f, 1.2f, borderColor);
 
-        byte[] coverBytes = hasGsmtc ? manager.getCoverBytes() : skija.getLocalCoverBytes();
         skija.drawCover(coverBytes, px + 3.5f, py + 3.5f, 17f, 17f, 4f);
 
         float textX = px + 24f;
-        int btnRadius = 8;
-        int btnX = x + pillW - 13;
-        int btnY = y + 12;
-        lastBtnX = btnX;
-        lastBtnY = btnY;
-        lastBtnRadius = btnRadius;
         float localBtnX = px + pillW - 13f;
         float localBtnY = py + 12f;
 
         float barsX = localBtnX - 28f;
         float timeX = barsX - 5f;
-        long posSec = hasGsmtc ? (long)manager.getPosition() : local.getCurrentPosition() / 1000000L;
         String timeStr = GsmtcHudOverlay.formatTime(posSec);
 
         float timeW = skija.getTextWidth(timeStr, 8.5f, true);
         float maxTitleW = timeX - timeW - 5f - textX;
         String displayTitle = title;
-        if (skija.getTextWidth(displayTitle, 10f, true) > maxTitleW) {
-            while (displayTitle.length() > 3 && skija.getTextWidth(displayTitle + "..", 10f, true) > maxTitleW) {
+        float titleW = skija.getTextWidth(displayTitle, 10f, true);
+        if (titleW > maxTitleW) {
+            int est = (int) Math.max(1, displayTitle.length() * (maxTitleW / titleW));
+            displayTitle = displayTitle.substring(0, Math.min(displayTitle.length(), est));
+            while (displayTitle.length() > 1 && skija.getTextWidth(displayTitle + "..", 10f, true) > maxTitleW) {
                 displayTitle = displayTitle.substring(0, displayTitle.length() - 1);
             }
             displayTitle = displayTitle + "..";
@@ -198,8 +244,11 @@ public class GsmtcHudOverlay {
         skija.drawText(displayTitle, textX, py + 8.5f, 10f, 0xFFFFFFFF, true, SkijaEngine.ALIGN_LEFT);
 
         String displaySub = subText;
-        if (skija.getTextWidth(displaySub, 8f, false) > maxTitleW) {
-            while (displaySub.length() > 3 && skija.getTextWidth(displaySub + "..", 8f, false) > maxTitleW) {
+        float subW = skija.getTextWidth(displaySub, 8f, false);
+        if (subW > maxTitleW) {
+            int est = (int) Math.max(1, displaySub.length() * (maxTitleW / subW));
+            displaySub = displaySub.substring(0, Math.min(displaySub.length(), est));
+            while (displaySub.length() > 1 && skija.getTextWidth(displaySub + "..", 8f, false) > maxTitleW) {
                 displaySub = displaySub.substring(0, displaySub.length() - 1);
             }
             displaySub = displaySub + "..";
@@ -208,14 +257,13 @@ public class GsmtcHudOverlay {
         skija.drawText(timeStr, timeX - timeW, py + 12.0f, 8.5f, 0xFFCCCCCC, true, SkijaEngine.ALIGN_LEFT);
 
         if (isPlaying) {
-            skija.drawEqualizerBars(barsX, py + 7f, 10f, 10f, borderColor, System.currentTimeMillis());
+            skija.drawEqualizerBars(barsX, py + 7f, 10f, 10f, borderColor, now);
         } else {
             for (int i = 0; i < 4; ++i) {
                 skija.drawRoundedRect(barsX + (float)i * 2.8f, py + 14.5f, 1.6f, 2.5f, 0.8f, 0x44FFFFFF);
             }
         }
 
-        boolean hoverBtn = GsmtcHudOverlay.isInsideCircle(mouseX, mouseY, btnX, btnY, btnRadius + 3);
         skija.drawPlayPauseButton(localBtnX, localBtnY, 7.5f, isPlaying, hoverBtn, borderColor);
 
         float barX = textX;
@@ -230,6 +278,19 @@ public class GsmtcHudOverlay {
         }
 
         skija.endHudFrame();
+
+        lastHudRenderTime = now;
+        hudTextureReady = true;
+        lastHudTitle = title;
+        lastHudArtist = artist;
+        lastHudPlaying = isPlaying;
+        lastHudHover = isHovered;
+        lastHudBtnHover = hoverBtn;
+        lastHudPosSec = posSec;
+        lastHudBorderColor = borderColor;
+        lastHudCover = coverBytes;
+        lastHudScale = guiScale;
+
         skija.renderHudToContext(ctx, x - 8, y - 6, frameW, frameH);
     }
 

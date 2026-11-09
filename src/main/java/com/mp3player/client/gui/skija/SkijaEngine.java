@@ -75,6 +75,19 @@ public class SkijaEngine {
     private Font boldFont;
     private Font iconFont;
 
+    // Reusable Paint instances to eliminate per-frame native JNI allocations
+    private final Paint fillPaint = new Paint();
+    private final Paint strokePaint = new Paint();
+    private final Paint textPaint = new Paint();
+    private final Paint shadowPaint = new Paint();
+    private final Paint imagePaint = new Paint();
+
+    // Caches to avoid recreating fonts and blur mask filters every frame
+    private final java.util.Map<Integer, Font> regularFontCache = new java.util.HashMap<>();
+    private final java.util.Map<Integer, Font> boldFontCache = new java.util.HashMap<>();
+    private final java.util.Map<Integer, Font> iconFontCache = new java.util.HashMap<>();
+    private final java.util.Map<Integer, MaskFilter> blurFilterCache = new java.util.HashMap<>();
+
     private volatile byte[] gsmtcCoverBytes;
     private volatile byte[] localCoverBytes;
     private volatile Image gsmtcCoverImage;
@@ -94,6 +107,11 @@ public class SkijaEngine {
     private void init() {
         try {
             MP3PlayerClient.LOGGER.info("[Skija] Initializing Skija vector graphics engine...");
+            this.fillPaint.setAntiAlias(true);
+            this.strokePaint.setAntiAlias(true);
+            this.strokePaint.setMode(PaintMode.STROKE);
+            this.textPaint.setAntiAlias(true);
+            this.imagePaint.setAntiAlias(true);
             loadFonts();
             this.available = true;
             MP3PlayerClient.LOGGER.info("[Skija] Skija vector engine initialized successfully!");
@@ -101,6 +119,31 @@ public class SkijaEngine {
             MP3PlayerClient.LOGGER.error("[Skija] Failed to initialize Skija: {}", t.getMessage(), t);
             this.available = false;
         }
+    }
+
+    private Font getFont(Typeface tf, float fontSize, boolean bold, boolean icon) {
+        if (tf == null) tf = this.regularTypeface;
+        int key = Math.round(fontSize * 10f);
+        java.util.Map<Integer, Font> cache = icon ? iconFontCache : (bold ? boldFontCache : regularFontCache);
+        Font f = cache.get(key);
+        if (f == null) {
+            f = new Font(tf, fontSize);
+            f.setSubpixel(true);
+            f.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
+            cache.put(key, f);
+        }
+        return f;
+    }
+
+    private MaskFilter getBlurFilter(float radius) {
+        if (radius <= 0.01f) return null;
+        int key = Math.round(radius * 10f);
+        MaskFilter mf = blurFilterCache.get(key);
+        if (mf == null) {
+            mf = MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius);
+            blurFilterCache.put(key, mf);
+        }
+        return mf;
     }
 
     private void loadFonts() {
@@ -170,7 +213,7 @@ public class SkijaEngine {
         return this.darkTheme;
     }
 
-    public synchronized void beginFrame(int width, int height, float scale) {
+    public synchronized void beginFrame(int width, int height, float scale, float offsetX, float offsetY) {
         if (!this.available || width <= 0 || height <= 0) {
             return;
         }
@@ -206,8 +249,15 @@ public class SkijaEngine {
             this.canvas.clear(0x00000000);
             this.canvas.resetMatrix();
             this.canvas.scale(actualScale, actualScale);
+            if (offsetX != 0f || offsetY != 0f) {
+                this.canvas.translate(offsetX, offsetY);
+            }
             this.canvas.save();
         }
+    }
+
+    public synchronized void beginFrame(int width, int height, float scale) {
+        beginFrame(width, height, scale, 0f, 0f);
     }
 
     public synchronized void beginFrame(int width, int height) {
@@ -322,108 +372,79 @@ public class SkijaEngine {
 
     public void drawRoundedRect(float x, float y, float w, float h, float radius, int color) {
         if (this.canvas == null) return;
-        try (Paint paint = new Paint()) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), paint);
-        }
+        fillPaint.setColor(color);
+        this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), fillPaint);
     }
 
     public void drawRoundedRectOutline(float x, float y, float w, float h, float radius, float strokeWidth, int color) {
         if (this.canvas == null || strokeWidth <= 0) return;
-        try (Paint stroke = new Paint()) {
-            stroke.setColor(color);
-            stroke.setMode(PaintMode.STROKE);
-            stroke.setStrokeWidth(strokeWidth);
-            stroke.setAntiAlias(true);
-            float off = strokeWidth / 2f;
-            this.canvas.drawRRect(RRect.makeXYWH(x + off, y + off, w - strokeWidth, h - strokeWidth, Math.max(0, radius - off)), stroke);
-        }
+        strokePaint.setColor(color);
+        strokePaint.setStrokeWidth(strokeWidth);
+        float off = strokeWidth / 2f;
+        this.canvas.drawRRect(RRect.makeXYWH(x + off, y + off, w - strokeWidth, h - strokeWidth, Math.max(0, radius - off)), strokePaint);
     }
 
     public void drawRoundedRectStroke(float x, float y, float w, float h, float radius, int fillColor, int strokeColor, float strokeWidth) {
         if (this.canvas == null) return;
-        try (Paint fill = new Paint(); Paint stroke = new Paint()) {
-            fill.setColor(fillColor);
-            fill.setAntiAlias(true);
-            this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), fill);
+        fillPaint.setColor(fillColor);
+        this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), fillPaint);
 
-            if (strokeColor != 0 && strokeWidth > 0) {
-                stroke.setColor(strokeColor);
-                stroke.setMode(PaintMode.STROKE);
-                stroke.setStrokeWidth(strokeWidth);
-                stroke.setAntiAlias(true);
-                float off = strokeWidth / 2f;
-                this.canvas.drawRRect(RRect.makeXYWH(x + off, y + off, w - strokeWidth, h - strokeWidth, Math.max(0, radius - off)), stroke);
-            }
+        if (strokeColor != 0 && strokeWidth > 0) {
+            strokePaint.setColor(strokeColor);
+            strokePaint.setStrokeWidth(strokeWidth);
+            float off = strokeWidth / 2f;
+            this.canvas.drawRRect(RRect.makeXYWH(x + off, y + off, w - strokeWidth, h - strokeWidth, Math.max(0, radius - off)), strokePaint);
         }
     }
 
     public void drawCard(float x, float y, float w, float h, float radius, int bgColor, int borderColor, float shadowBlur) {
         if (this.canvas == null) return;
         if (shadowBlur > 0) {
-            try (Paint shadow = new Paint()) {
-                shadow.setColor(0x44000000);
-                shadow.setMaskFilter(MaskFilter.makeBlur(FilterBlurMode.NORMAL, shadowBlur));
-                this.canvas.drawRRect(RRect.makeXYWH(x, y + 2, w, h, radius), shadow);
-            }
+            drawDropShadow(x, y + 2, w, h, radius, shadowBlur, 0f, 0x44000000);
         }
         drawRoundedRectStroke(x, y, w, h, radius, bgColor, borderColor, 1.0f);
     }
 
     public void drawDropShadow(float x, float y, float w, float h, float radius, float blur, float spread, int color) {
         if (this.canvas == null || blur <= 0) return;
-        try (Paint shadow = new Paint()) {
-            shadow.setColor(color);
-            shadow.setMaskFilter(MaskFilter.makeBlur(FilterBlurMode.NORMAL, blur / 2f));
-            this.canvas.drawRRect(RRect.makeXYWH(x - spread, y - spread + 2f, w + spread * 2f, h + spread * 2f, radius), shadow);
-        }
+        shadowPaint.setColor(color);
+        MaskFilter mf = getBlurFilter(blur / 2f);
+        shadowPaint.setMaskFilter(mf);
+        this.canvas.drawRRect(RRect.makeXYWH(x - spread, y - spread + 2f, w + spread * 2f, h + spread * 2f, radius), shadowPaint);
+        shadowPaint.setMaskFilter(null);
     }
 
     public void drawGradientRect(float x, float y, float w, float h, float radius, int topColor, int bottomColor) {
         if (this.canvas == null) return;
-        try (Paint paint = new Paint();
-             Shader shader = Shader.makeLinearGradient(x, y, x, y + h, new int[]{topColor, bottomColor})) {
-            paint.setShader(shader);
-            paint.setAntiAlias(true);
-            this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), paint);
+        try (Shader shader = Shader.makeLinearGradient(x, y, x, y + h, new int[]{topColor, bottomColor})) {
+            fillPaint.setShader(shader);
+            this.canvas.drawRRect(RRect.makeXYWH(x, y, w, h, radius), fillPaint);
+            fillPaint.setShader(null);
         }
     }
 
     public void drawCircle(float cx, float cy, float radius, int color) {
         if (this.canvas == null) return;
-        try (Paint paint = new Paint()) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            this.canvas.drawCircle(cx, cy, radius, paint);
-        }
+        fillPaint.setColor(color);
+        this.canvas.drawCircle(cx, cy, radius, fillPaint);
     }
 
     public void drawCircleOutline(float cx, float cy, float radius, float strokeWidth, int color) {
         if (this.canvas == null || strokeWidth <= 0) return;
-        try (Paint stroke = new Paint()) {
-            stroke.setColor(color);
-            stroke.setMode(PaintMode.STROKE);
-            stroke.setStrokeWidth(strokeWidth);
-            stroke.setAntiAlias(true);
-            this.canvas.drawCircle(cx, cy, radius, stroke);
-        }
+        strokePaint.setColor(color);
+        strokePaint.setStrokeWidth(strokeWidth);
+        this.canvas.drawCircle(cx, cy, radius, strokePaint);
     }
 
     public void drawCircleStroke(float cx, float cy, float radius, int fillColor, int strokeColor, float strokeWidth) {
         if (this.canvas == null) return;
-        try (Paint fill = new Paint(); Paint stroke = new Paint()) {
-            fill.setColor(fillColor);
-            fill.setAntiAlias(true);
-            this.canvas.drawCircle(cx, cy, radius, fill);
+        fillPaint.setColor(fillColor);
+        this.canvas.drawCircle(cx, cy, radius, fillPaint);
 
-            if (strokeColor != 0 && strokeWidth > 0) {
-                stroke.setColor(strokeColor);
-                stroke.setMode(PaintMode.STROKE);
-                stroke.setStrokeWidth(strokeWidth);
-                stroke.setAntiAlias(true);
-                this.canvas.drawCircle(cx, cy, radius - strokeWidth / 2f, stroke);
-            }
+        if (strokeColor != 0 && strokeWidth > 0) {
+            strokePaint.setColor(strokeColor);
+            strokePaint.setStrokeWidth(strokeWidth);
+            this.canvas.drawCircle(cx, cy, radius - strokeWidth / 2f, strokePaint);
         }
     }
 
@@ -535,24 +556,19 @@ public class SkijaEngine {
 
     public void drawText(String text, float x, float y, float fontSize, int color, boolean bold, int align) {
         if (this.canvas == null || text == null || text.isEmpty()) return;
-        try (Paint paint = new Paint();
-             Font font = new Font(bold ? this.boldTypeface : this.regularTypeface, fontSize)) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            font.setSubpixel(true);
-            font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
-            Rect bounds = font.measureText(text, paint);
-            float baselineY = y - (bounds.getTop() + bounds.getBottom()) / 2f;
-            float startX;
-            if (align == ALIGN_CENTER) {
-                startX = x - (bounds.getLeft() + bounds.getRight()) / 2f;
-            } else if (align == ALIGN_RIGHT) {
-                startX = x - bounds.getRight();
-            } else {
-                startX = x - bounds.getLeft();
-            }
-            this.canvas.drawString(text, startX, baselineY, font, paint);
+        Font font = getFont(bold ? this.boldTypeface : this.regularTypeface, fontSize, bold, false);
+        textPaint.setColor(color);
+        Rect bounds = font.measureText(text, textPaint);
+        float baselineY = y - (bounds.getTop() + bounds.getBottom()) / 2f;
+        float startX;
+        if (align == ALIGN_CENTER) {
+            startX = x - (bounds.getLeft() + bounds.getRight()) / 2f;
+        } else if (align == ALIGN_RIGHT) {
+            startX = x - bounds.getRight();
+        } else {
+            startX = x - bounds.getLeft();
         }
+        this.canvas.drawString(text, startX, baselineY, font, textPaint);
     }
 
     public void drawCenteredText(String text, float cx, float y, float fontSize, int color, boolean bold) {
@@ -566,8 +582,9 @@ public class SkijaEngine {
             this.drawText(text, x, y, size, color, bold, ALIGN_LEFT);
             return;
         }
-        String truncated = text;
-        while (truncated.length() > 3 && this.getTextWidth(truncated + "…", size, bold) > maxW) {
+        int targetLen = (int) Math.max(1, text.length() * (maxW / tw));
+        String truncated = text.substring(0, Math.min(text.length(), targetLen));
+        while (truncated.length() > 1 && this.getTextWidth(truncated + "…", size, bold) > maxW) {
             truncated = truncated.substring(0, truncated.length() - 1);
         }
         this.drawText(truncated + "…", x, y, size, color, bold, ALIGN_LEFT);
@@ -575,10 +592,8 @@ public class SkijaEngine {
 
     public float getTextWidth(String text, float fontSize, boolean bold) {
         if (text == null || text.isEmpty()) return 0f;
-        try (Paint p = new Paint();
-             Font f = new Font(bold ? this.boldTypeface : this.regularTypeface, fontSize)) {
-            return f.measureTextWidth(text, p);
-        }
+        Font font = getFont(bold ? this.boldTypeface : this.regularTypeface, fontSize, bold, false);
+        return font.measureTextWidth(text, textPaint);
     }
 
     // ==========================================
@@ -587,12 +602,9 @@ public class SkijaEngine {
 
     public void drawIcon(String glyph, float x, float y, float size, int color) {
         if (this.canvas == null || glyph == null || glyph.isEmpty()) return;
-        try (Paint paint = new Paint();
-             Font font = new Font(this.iconTypeface, size)) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            this.canvas.drawString(glyph, x, y, font, paint);
-        }
+        Font font = getFont(this.iconTypeface != null ? this.iconTypeface : this.regularTypeface, size, false, true);
+        textPaint.setColor(color);
+        this.canvas.drawString(glyph, x, y, font, textPaint);
     }
 
     public void drawIcon(String glyph, float x, float y, float size, int color, int align) {
@@ -605,17 +617,12 @@ public class SkijaEngine {
 
     public void drawCenteredIcon(String glyph, float cx, float cy, float size, int color) {
         if (this.canvas == null || glyph == null || glyph.isEmpty()) return;
-        try (Paint paint = new Paint();
-             Font font = new Font(this.iconTypeface != null ? this.iconTypeface : this.regularTypeface, size)) {
-            paint.setColor(color);
-            paint.setAntiAlias(true);
-            font.setSubpixel(true);
-            font.setEdging(FontEdging.SUBPIXEL_ANTI_ALIAS);
-            Rect bounds = font.measureText(glyph, paint);
-            float x = cx - (bounds.getLeft() + bounds.getRight()) / 2f;
-            float y = cy - (bounds.getTop() + bounds.getBottom()) / 2f;
-            this.canvas.drawString(glyph, x, y, font, paint);
-        }
+        Font font = getFont(this.iconTypeface != null ? this.iconTypeface : this.regularTypeface, size, false, true);
+        textPaint.setColor(color);
+        Rect bounds = font.measureText(glyph, textPaint);
+        float x = cx - (bounds.getLeft() + bounds.getRight()) / 2f;
+        float y = cy - (bounds.getTop() + bounds.getBottom()) / 2f;
+        this.canvas.drawString(glyph, x, y, font, textPaint);
     }
 
     public void drawPlayIcon(float cx, float cy, float radius, int color) {
@@ -626,10 +633,9 @@ public class SkijaEngine {
             pb.lineTo(cx + radius * 0.65f + off, cy);
             pb.lineTo(cx - radius * 0.45f + off, cy + radius * 0.6f);
             pb.closePath();
-            try (Path path = pb.build(); Paint paint = new Paint()) {
-                paint.setColor(color);
-                paint.setAntiAlias(true);
-                this.canvas.drawPath(path, paint);
+            try (Path path = pb.build()) {
+                fillPaint.setColor(color);
+                this.canvas.drawPath(path, fillPaint);
             }
         }
     }
@@ -652,10 +658,9 @@ public class SkijaEngine {
             pb.lineTo(cx, cy);
             pb.lineTo(cx - triSize * dir, cy + triSize);
             pb.closePath();
-            try (Path path = pb.build(); Paint paint = new Paint()) {
-                paint.setColor(color);
-                paint.setAntiAlias(true);
-                this.canvas.drawPath(path, paint);
+            try (Path path = pb.build()) {
+                fillPaint.setColor(color);
+                this.canvas.drawPath(path, fillPaint);
             }
         }
         float barW = radius * 0.25f;
@@ -700,14 +705,15 @@ public class SkijaEngine {
             pb.cubicTo(cx - s * 1.2f, cy - s * 0.3f, cx - s * 1.2f, cy - s * 1.1f, cx, cy - s * 0.5f);
             pb.cubicTo(cx + s * 1.2f, cy - s * 1.1f, cx + s * 1.2f, cy - s * 0.3f, cx, cy + s * 0.7f);
             pb.closePath();
-            try (Path path = pb.build(); Paint paint = new Paint()) {
-                paint.setColor(color);
-                paint.setAntiAlias(true);
-                if (!filled) {
-                    paint.setMode(PaintMode.STROKE);
-                    paint.setStrokeWidth(1.5f);
+            try (Path path = pb.build()) {
+                if (filled) {
+                    fillPaint.setColor(color);
+                    this.canvas.drawPath(path, fillPaint);
+                } else {
+                    strokePaint.setColor(color);
+                    strokePaint.setStrokeWidth(1.5f);
+                    this.canvas.drawPath(path, strokePaint);
                 }
-                this.canvas.drawPath(path, paint);
             }
         }
     }
@@ -952,13 +958,9 @@ public class SkijaEngine {
 
     public void drawBezierCurve(Path path, int color, float strokeWidth) {
         if (this.canvas == null || path == null) return;
-        try (Paint paint = new Paint()) {
-            paint.setColor(color);
-            paint.setMode(PaintMode.STROKE);
-            paint.setStrokeWidth(strokeWidth);
-            paint.setAntiAlias(true);
-            this.canvas.drawPath(path, paint);
-        }
+        strokePaint.setColor(color);
+        strokePaint.setStrokeWidth(strokeWidth);
+        this.canvas.drawPath(path, strokePaint);
     }
 
     public synchronized void updateGsmtcCoverImage(byte[] bytes) {
@@ -1048,6 +1050,29 @@ public class SkijaEngine {
             try { this.localCoverImage.close(); } catch (Throwable ignored) {}
             this.localCoverImage = null;
         }
+        for (Font f : regularFontCache.values()) {
+            try { f.close(); } catch (Throwable ignored) {}
+        }
+        regularFontCache.clear();
+        for (Font f : boldFontCache.values()) {
+            try { f.close(); } catch (Throwable ignored) {}
+        }
+        boldFontCache.clear();
+        for (Font f : iconFontCache.values()) {
+            try { f.close(); } catch (Throwable ignored) {}
+        }
+        iconFontCache.clear();
+        for (MaskFilter mf : blurFilterCache.values()) {
+            try { mf.close(); } catch (Throwable ignored) {}
+        }
+        blurFilterCache.clear();
+
+        try { fillPaint.close(); } catch (Throwable ignored) {}
+        try { strokePaint.close(); } catch (Throwable ignored) {}
+        try { textPaint.close(); } catch (Throwable ignored) {}
+        try { shadowPaint.close(); } catch (Throwable ignored) {}
+        try { imagePaint.close(); } catch (Throwable ignored) {}
+
         if (this.regularFont != null) {
             try { this.regularFont.close(); } catch (Throwable ignored) {}
             this.regularFont = null;
