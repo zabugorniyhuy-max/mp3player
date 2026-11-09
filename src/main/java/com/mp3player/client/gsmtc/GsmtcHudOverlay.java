@@ -196,14 +196,15 @@ public class GsmtcHudOverlay {
                 || Math.abs(guiScale - lastHudScale) > 0.01f;
 
         boolean inMainScreen = Minecraft.getInstance().gui != null && Minecraft.getInstance().gui.screen() instanceof MainScreen;
+        boolean isGpu = skija.isGpuMode();
         boolean needRedraw;
         if (inMainScreen && hudTextureReady) {
             needRedraw = false;
-        } else if (!hudTextureReady || stateChanged) {
+        } else if (!hudTextureReady || stateChanged || isGpu) {
             needRedraw = true;
         } else if (isPlaying) {
-            // Smooth ~11 FPS update for animated equalizer wave while playing (eliminates GPU texture stalls)
-            needRedraw = (now - lastHudRenderTime) >= 90L;
+            // Smooth 60 FPS update for animated equalizer wave while playing
+            needRedraw = (now - lastHudRenderTime) >= 16L;
         } else {
             // Paused with no state change: skip redraw and re-use existing texture directly!
             needRedraw = false;
