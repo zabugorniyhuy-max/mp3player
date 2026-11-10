@@ -656,20 +656,11 @@ public class GsmtcManager {
             return;
         }
         this.isShutdown = true;
-        com.mp3player.MP3PlayerClient.LOGGER.info("[GSMTC] Shutting down GSMTC background poll and bridge...");
+        com.mp3player.MP3PlayerClient.LOGGER.info("[GSMTC] Shutting down GSMTC background poll...");
         try {
             this.pollExecutor.shutdownNow();
             this.pollExecutor.awaitTermination(300, TimeUnit.MILLISECONDS);
         } catch (Throwable ignored) {}
-
-        if (this.bridge != null) {
-            try {
-                this.bridge.browser_close();
-            } catch (Throwable ignored) {}
-            try {
-                this.bridge.gsmtc_cleanup();
-            } catch (Throwable ignored) {}
-        }
 
         try {
             if (this.coverTexture != null) {

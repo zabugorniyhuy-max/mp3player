@@ -55,6 +55,10 @@ public class ModConfig {
         } else {
             instance = new ModConfig();
         }
+        if (instance == null) {
+            instance = new ModConfig();
+        }
+        instance.useSkija = true;
     }
 
     public void save() {

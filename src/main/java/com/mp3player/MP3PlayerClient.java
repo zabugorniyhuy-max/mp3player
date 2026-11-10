@@ -374,14 +374,6 @@ implements ClientModInitializer {
             }
             LOGGER.info("[MP3Player] Cleanup completed successfully.");
         });
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
-                GsmtcManager.getInstance().shutdown();
-            } catch (Throwable ignored) {}
-            try {
-                MusicPlayer.getInstance().stop();
-            } catch (Throwable ignored) {}
-        }, "MP3Player-ShutdownHook"));
         GsmtcHudOverlay.register();
         ModSounds.register();
         KeyInputHandler.register();
